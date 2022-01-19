@@ -1,4 +1,5 @@
 useDynLib(papss)
 import(RcppEigen)
 importFrom(Rcpp, evalCpp)
-export("Rcpp.fake.fun")
+export("rcppeigen_hello_world")
+export("rcppeigen_outerproduct")
