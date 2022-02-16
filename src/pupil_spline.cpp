@@ -34,3 +34,14 @@ int Penalty::getDim()
 {
     return dim;
 }
+
+// Identity penalty class implements Penalty interface.
+class IdentityPenalty : public Penalty
+{
+public:
+    // Constructors
+    IdentityPenalty(int dim);
+    // Implement Penalty interface
+    MatrixXd getPenalty();
+    MatrixXd parameterizePenalty(double l);
+};
