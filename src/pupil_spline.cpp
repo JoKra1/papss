@@ -76,7 +76,7 @@ Eigen::MatrixXd IdentityPenalty::parameterizePenalty(double l)
 // associated with this lambda value. It comes with a method to extract these penalties
 // (Not sure whether that is needed, just thought it might be handy..), a method to embedd these
 // penalties in a zero-padded matrix (S in Wood 2017) to represent them in quadratic form cf' * S * cf
-// where cf contains the weight for each column in the model matrix (Wood, 2017 s. 4.3.1).
+// where cf contains a weight for each column in the model matrix (Wood, 2017 s. 4.3.1).
 // This same method can also be used to embed multiple lambda terms in the same zero-padded matrix, which is
 // required for the generalized Fellner Schall update described in Wood & Fasiolo (2017):
 // 'A generalized Fellner-Schall method for smoothing parameter optimization with application
@@ -96,3 +96,37 @@ public:
     void stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::MatrixXd &cf, const Eigen::MatrixXd &inv,
                            const Eigen::MatrixXd &gInv, int &cIndex, double sigma);
 };
+
+// Associate n penalties of dimension (dim) with this LambdaTerm.
+LambdaTerm::LambdaTerm(int n, int dim)
+{
+    nPenalties = n;
+    lambda = 0.1;
+
+    // Create associated penalty objects
+    for (int i = 0; i < n; ++i)
+    {
+        /*
+        Penalty is an abstract class, so if we later want to loop over the penalties
+        in a vector, we cannot do for (Penalty S: penalties) {...} (1). Thus we store pointers
+        to Penalties in the penalties vector (2,3). We need to move the unique pointer to the penalties,
+        since it cannot be copied (2,3). Later we can then call the virtual functions required by Penalty
+        implementations through the pointer (4).
+
+        (1) See: https://en.cppreference.com/w/cpp/language/abstract_class
+        (2) See: https://en.cppreference.com/w/cpp/memory/unique_ptr
+        (3) See: https://stackoverflow.com/questions/31410858/adding-elements-to-stdvector-of-an-abstract-class
+        (4) See: https://en.cppreference.com/w/cpp/language/virtual
+        */
+        std::unique_ptr<Penalty> newPenalty = std::make_unique<IdentityPenalty>(dim);
+        penalties.push_back(std::move(newPenalty));
+    }
+}
+
+// Return a const reference to the penalties. Method is itself declared as const
+// since it should never modfiy an instance which calls this.
+// See: https://isocpp.org/wiki/faq/const-correctness
+const std::vector<std::unique_ptr<Penalty>> &LambdaTerm::getPenalties() const
+{
+    return penalties;
+}
