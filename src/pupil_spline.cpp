@@ -19,7 +19,7 @@
 // Needs a public method to get the raw penalty matrix and the same matrix
 // parameterized with a lambda term.
 // These penalty terms are discussed extensively in Wood (2017)
-// Generalized Additive Models : An introduction with R, Second Edition
+// 'Generalized Additive Models : An introduction with R, Second Edition'
 class Penalty
 {
 protected:
@@ -78,8 +78,10 @@ Eigen::MatrixXd IdentityPenalty::parameterizePenalty(double l)
 // penalties in a zero-padded matrix (S in Wood 2017) to represent them in quadratic form cf' * S * cf
 // where cf contains the weight for each column in the model matrix (Wood, 2017 s. 4.3.1).
 // This same method can also be used to embed multiple lambda terms in the same zero-padded matrix, which is
-// required for the EFS update described in Wood & Fasiolo (2017). The latter is also implemented
-// as a method here so that the lambda values of each term can be updated.
+// required for the generalized Fellner Schall update described in Wood & Fasiolo (2017):
+// 'A generalized Fellner-Schall method for smoothing parameter optimization with application
+// to Tweedie location, scale and shape models'
+// This update is also implemented as a method here so that the lambda values of each term can be updated.
 class LambdaTerm
 {
 private:
