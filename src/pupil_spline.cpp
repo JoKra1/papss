@@ -29,3 +29,8 @@ public:
     int getDim();
 };
 
+// Dimension getter
+int Penalty::getDim()
+{
+    return dim;
+}
