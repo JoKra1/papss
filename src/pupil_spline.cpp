@@ -130,3 +130,22 @@ const std::vector<std::unique_ptr<Penalty>> &LambdaTerm::getPenalties() const
 {
     return penalties;
 }
+
+// Embed all penalties belonging to this term in a zero-padded matrix embS as discussed by Wood (2017, s. 4.3.1).
+// cIndex corresponds to the starting index (row & column) at which we want to start embedding the penalties.
+// This is handy in case the model matrix contains un-penalized terms. Thus, any model matrix used by this implementation
+// should be ordered - starting with unpenalized columns/terms following by penalized terms.
+void LambdaTerm::embeddInS(Eigen::MatrixXd &embS, int &cIndex)
+{
+    /*
+    As described in the constructor of the LambdaTerm class, we here loop over the
+    ptrs in the penaltyList (i.e., again over there references) and access the
+    virtual functions implemented by the specific penalties to fill the full matrix block.
+    */
+    for (const std::unique_ptr<Penalty> &S : penalties)
+    {
+        int dimS = S->getDim();
+        embS.block(cIndex, cIndex, dimS, dimS) = S->parameterizePenalty(lambda);
+        cIndex += dimS;
+    }
+}
