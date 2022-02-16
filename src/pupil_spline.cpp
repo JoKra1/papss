@@ -42,6 +42,28 @@ public:
     // Constructors
     IdentityPenalty(int dim);
     // Implement Penalty interface
-    MatrixXd getPenalty();
-    MatrixXd parameterizePenalty(double l);
+    Eigen::MatrixXd getPenalty();
+    Eigen::MatrixXd parameterizePenalty(double l);
 };
+
+// Constructor for IdentityPenalty.
+// Parameters:
+// int dim: dimensionalty (rows & cols) of the penalty
+IdentityPenalty::IdentityPenalty(int dim)
+{
+    this->dim = dim;
+}
+
+// Returns identity penalty of dimensions (dim, dim)
+Eigen::MatrixXd IdentityPenalty::getPenalty()
+{
+    Eigen::MatrixXd S = Eigen::MatrixXd::Identity(dim, dim);
+    return S;
+}
+
+// Returns a lambda parameterized penalty of dimensions (dim, dim)
+Eigen::MatrixXd IdentityPenalty::parameterizePenalty(double l)
+{
+    Eigen::MatrixXd Sl = getPenalty().array() * l;
+    return Sl;
+}
