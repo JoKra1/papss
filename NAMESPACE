@@ -1,5 +1,3 @@
 useDynLib(papss)
 import(RcppEigen)
 importFrom(Rcpp, evalCpp)
-export("rcppeigen_hello_world")
-export("rcppeigen_outerproduct")

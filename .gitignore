@@ -42,3 +42,9 @@ vignettes/*.pdf
 # Build files
 src/*.dll
 src/*.o
+
+# Development related
+data/*
+gamms_pupil_helpers.R
+main.R
+src/tests.cpp
