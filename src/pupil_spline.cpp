@@ -162,7 +162,7 @@ void LambdaTerm::embeddInS(Eigen::MatrixXd &embS, int &cIndex)
 // obtained after repeated QR factorization and Cholesky decomposition, as described extensively
 // in Wood (2011, 2017) to improve on the ill-conditioned nature of the former term.
 void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::MatrixXd &cf, const Eigen::MatrixXd &inv,
-                                   const Eigen::MatrixXd &pInv, int &cIndex, double sigma)
+                                   const Eigen::MatrixXd &gInv, int &cIndex, double sigma)
 {
 
     // Embed penalties belonging to this lambda term in a zero-padded matrix embJ of size embS.
@@ -171,7 +171,7 @@ void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::Mat
     this->embeddInS(embJ, cIndex);
 
     // Calculate Numerator and Demoninator of the FS update, as described above.
-    double num = (pInv * embJ).trace() - (inv * embJ).trace();
+    double num = (gInv * embJ).trace() - (inv * embJ).trace();
     Eigen::MatrixXd denom = cf.transpose() * embJ * cf;
 
     // Now calculate the lambda update for this term.
@@ -271,4 +271,149 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
         prevCf = cf;
         prevErr = errDot;
     }
+}
+
+// Fits an additive model based on the stable LS solutions discussed in Wood (2011,2017). 
+Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::VectorXd> &initCf, const std::vector<char> &constraints, const std::vector<int> &lambdaTermFreq, int startIndex, int maxIter, int maxIterOptim, double tol = 0.001)
+{
+    // Get dimension of X for re-use later.
+    int rowsX = X.rows();
+    int colsX = X.cols();
+
+    // First compute QR decomposition of X.
+    Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr(X);
+    Eigen::MatrixXd R = qr.matrixR().template triangularView<Eigen::Upper>();
+
+    // We do not need the zero rows in R (i.e., we care only about the "reduced/thin" QR decomposition).
+    // Below, Eigen is forced to place the block in a temporary variable before assigning it to R.
+    // See: http://eigen.tuxfamily.org/dox/TopicLazyEvaluation.html
+    // See: https://stackoverflow.com/questions/30145771/shrink-matrix-with-eigen-using-block-in-assignment
+    R = R.block(0, 0, colsX, colsX).eval();
+
+    // We also do not need the full Q.
+    // See: https://forum.kde.org/viewtopic.php?f=74&t=91271
+    Eigen::MatrixXd Q = qr.householderQ().setLength(qr.nonzeroPivots()) * Eigen::MatrixXd::Identity(rowsX, colsX);
+
+    // Extract permutation matrix applied by Householder QR decomp and apply it to R.
+    // See: https://eigen.tuxfamily.org/dox/classEigen_1_1ColPivHouseholderQR.html
+    // See: https://en.wikipedia.org/wiki/QR_decomposition#Column_pivoting
+    Eigen::MatrixXd P = qr.colsPermutation();
+    R *= P.transpose();
+
+    // Now calculate f and r terms from Wood (2017)
+    Eigen::VectorXd f = Q.transpose() * y;
+    double r = y.dot(y) - f.dot(f);
+
+    // Create a set of coefficients
+    Eigen::VectorXd cf = Eigen::VectorXd(initCf);
+
+    // Prepare lambda terms.
+    std::vector<std::unique_ptr<LambdaTerm>> lambdaContainer;
+    for (int freq : lambdaTermFreq)
+    {
+        std::unique_ptr<LambdaTerm> LDT = std::make_unique<LambdaTerm>(freq, colsX);
+        lambdaContainer.push_back(std::move(LDT));
+    }
+
+    /*
+    for(const std::unique_ptr<LambdaTerm> &LDT: lambdaContainer){
+        const std::vector<std::unique_ptr<Penalty>> &penalties = (LDT)->getPenalties();
+    }
+    */
+
+    // Error increase check.
+    double prevErr = std::numeric_limits<double>::max();
+
+    // Now iteratively optimize cf and then the current smoothness penalties.
+    for (int i = 0; i < maxIter; ++i)
+    {
+        // Create embedded S term.
+        int cInd = startIndex;
+        Eigen::MatrixXd embS = Eigen::MatrixXd::Zero(colsX, colsX);
+
+        // Now embed all lambda terms into S.
+        for (const std::unique_ptr<LambdaTerm> &LDT : lambdaContainer)
+        {
+            (LDT)->embeddInS(embS, cInd);
+        }
+
+        // Optimize for cf given current lambda values.
+        agdTOptimize(cf, R, f, embS, constraints, r, maxIterOptim, tol);
+
+        // Now calculate the next step in the stable LS approach:
+        // QR decomposition based on R + Cholesky factor of embS.
+
+        // First the Cholesky factor using LDL' decomposition:
+        // See: https://eigen.tuxfamily.org/dox/classEigen_1_1LDLT.html
+        Eigen::LDLT<Eigen::MatrixXd> ldlt(embS);
+
+        // Now get the un-pivoted "Cholesky" factor of embS
+        // Notation follows: https://services.math.duke.edu/~jdr/2021f-218/materials/week11.pdf
+        // Start with un-pivoting the lower triangular matrix L.
+        Eigen::MatrixXd L = ldlt.matrixL();
+        Eigen::MatrixXd PL = ldlt.transpositionsP().transpose() * L;
+
+        // The .abs() is a cheat here so that the root does not fail.
+        // This is necessary since if embS is not positive semidefinite
+        // D will contain very small negative elements.
+        Eigen::VectorXd D = D.array().abs().sqrt();
+
+        // Final factor
+        Eigen::MatrixXd L1 = PL * D.asDiagonal();
+
+        // Concatenate R and L1
+        // See: https://stackoverflow.com/questions/21496157/eigen-how-to-concatenate-matrix-along-a-specific-dimension
+        Eigen::MatrixXd RL1(colsX + L1.rows(), colsX);
+        RL1 << R, L1;
+
+        // Now form the next QR decomposition (See above).
+        Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr2(RL1);
+        Eigen::MatrixXd R2 = qr2.matrixR().template triangularView<Eigen::Upper>();
+        R2 = R2.block(0, 0, colsX, colsX).eval();
+        Eigen::MatrixXd P2 = qr2.colsPermutation();
+        R2 *= P2.transpose();
+
+        // Q here needs an additional update that was not necessary in the first step.
+        Eigen::MatrixXd Q2 = qr2.householderQ().setLength(qr2.nonzeroPivots()) * Eigen::MatrixXd::Identity(RL1.rows(), colsX);
+        Q2 = Q * Q2.block(0, 0, colsX, colsX).eval();
+
+        // Now form the inverse of R2 (which is really the root of the inverse of X' %*% X + embS - see Wood (2017))
+        Eigen::MatrixXd rInv = R2.inverse();
+
+        // Now we can calculate the actual inverse, not the root, of the term above:
+        Eigen::MatrixXd Inv = rInv * rInv.transpose();
+
+        // We also need the pseudo inverse of embS for the EFS update.
+        // See: https://eigen.tuxfamily.org/dox/classEigen_1_1CompleteOrthogonalDecomposition.html
+        Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> ginvDecomp(embS);
+        Eigen::MatrixXd gInv = ginvDecomp.pseudoInverse();
+
+        // f and r also need to be recomputed.
+        Eigen::VectorXd f2 = Q2.transpose() * y;
+        double r2 = y.dot(y) - f2.dot(f2);
+
+        // Finally we need to calculate the current estimate of sigma^2.
+        Eigen::VectorXd res = f2 - R2 * cf;
+        double errDot = res.dot(res) + r2;
+        double sigma = errDot / (rowsX - (Inv * R.transpose() * R).trace());
+
+        // Crude convergence control
+        double absErrDiff = errDot > prevErr ? errDot - prevErr : prevErr - errDot;
+        if (absErrDiff < tol)
+        {
+            break;
+        }
+
+        prevErr = errDot;
+
+        // Now we can update all lamda terms.
+        cInd = startIndex;
+        for (const std::unique_ptr<LambdaTerm> &LDT : lambdaContainer)
+        {
+            // Update individual term.
+            (LDT)->stepFellnerSchall(embS, cf, Inv, gInv, cInd, sigma);
+        }
+        
+    }
+    return cf;
 }
