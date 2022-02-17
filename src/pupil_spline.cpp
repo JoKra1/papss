@@ -14,6 +14,10 @@
 //
 // [[Rcpp::depends(RcppEigen)]]
 
+
+// ##################################### Classes #####################################
+
+
 // Penalty abstract class (interface)
 // Is implemented by a specific penalty (probably first identity).
 // Needs a public method to get the raw penalty matrix and the same matrix
@@ -157,8 +161,8 @@ void LambdaTerm::embeddInS(Eigen::MatrixXd &embS, int &cIndex)
 // of semiparametric generalized linear models: Estimation of Semiparametric Generalized Linear Models'
 // the explicit calculation of (X' * X + embS)^-1 is undesirable. Thus we here invoke the update on
 // 'updated terms' (see below for a quick overview and Wood, 2011; Wood, 2017 for more details)
-// obtained after repeated QR factorization and Cholesky decomposition, as recommened in Wood (2011, 2017)
-// to improve on the ill-conditioned nature of the former term. Wood (2017) shows
+// obtained after repeated QR factorization and Cholesky decomposition, as described extensively
+// in Wood (2011, 2017) to improve on the ill-conditioned nature of the former term. Wood (2017) shows
 // that X can first be decomposed into X = Q * R. By obtaining f = t(Q) * y, the normal
 // solution to a least squares problem cf = (X' * X)^-1 * X' * y can be re-expressed in terms of
 // R and f as cf = (R)^-1 * f, allowing to consider the least squares problem purely in terms of R and f.
@@ -193,4 +197,29 @@ void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::Mat
 
     // Now calculate the lambda update for this term.
     lambda = sigma * num / denom(0, 0) * lambda;
+}
+
+
+// ##################################### Functions #####################################
+
+
+// Enforces positivity constraints on a vector. Based on the work by
+// Hoeks & Levelt (1993): 'Pupillary dilation as a measure of attention: A quantitative system analysis'
+// we require all 'attention spikes', i.e., the weights in our cf vector to be positive.
+// Thus, we unfortunately cannot rely on a closed solution for our optimization problem but have to
+// resort to perform projected gradient optimization, as discussed here: https://angms.science/doc/NMF/nnls_pgd.pdf.
+void enforceConstraints(Eigen::VectorXd &cf, const std::vector<char> &constraints)
+{
+    int idx = 0;
+    for (char c : constraints)
+    {
+        if (c == 'c')
+        {
+            if (cf(idx) < 0)
+            {
+                cf(idx) = 0;
+            }
+        }
+        ++idx;
+    }
 }
