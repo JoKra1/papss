@@ -149,3 +149,48 @@ void LambdaTerm::embeddInS(Eigen::MatrixXd &embS, int &cIndex)
         cIndex += dimS;
     }
 }
+
+// Perform a generalized Fellner Schall update step for a lambda term. This update rule is
+// discussed in Wood & Fasiolo (2017). In the paper, the authors provide the update in terms
+// of X and y (as well as X and z for generalized models). However, as discussed in Wood (2017)
+// and Wood (2011): 'Fast stable restricted maximum likelihood and marginal likelihood estimation
+// of semiparametric generalized linear models: Estimation of Semiparametric Generalized Linear Models'
+// the explicit calculation of (X' * X + embS)^-1 is undesirable. Thus we here invoke the update on
+// 'updated terms' (see below for a quick overview and Wood, 2011; Wood, 2017 for more details)
+// obtained after repeated QR factorization and Cholesky decomposition, as recommened in Wood (2011, 2017)
+// to improve on the ill-conditioned nature of the former term. Wood (2017) shows
+// that X can first be decomposed into X = Q * R. By obtaining f = t(Q) * y, the normal
+// solution to a least squares problem cf = (X' * X)^-1 * X' * y can be re-expressed in terms of
+// R and f as cf = (R)^-1 * f, allowing to consider the least squares problem purely in terms of R and f.
+// In case of a penalized least squares problem (as the one considered here), involving a penalty
+// matrix like embS, Wood (2011, 2017) shows that after first obtaining the Cholesky factor cholS of
+// embS = cholS' * cholS and then forming a second QR decomposition of the row-wise concatenation [R,cholS] = Q2 * R2,
+// R2 corresponds to the root of X' * X + embS - thus yielding (X' * X + embS)^-1 = (R2)^-1 * (R2)^-1'
+// (Note that additional updates to f are necessary, involving Q and Q2, see: Wood, 2017).
+// Thus, the update rule as discussed in Wood & Fasiolo (2017):
+// lambda_i+1 = sigma^2 * ((tr(ginv(embS) * embJ) - tr((X' * X + embS)^-1) * embJ) / (cf' * embJ * cf)) * lambda_i
+// is here calculated as:
+// lambda_i+1 = sigma^2 * ((tr(ginv(embS) * embJ) - tr((R2)^-1 * (R2)^-1' * embJ) / (cf' * embJ * cf)) * lambda_i
+// Where tr() denotes the trace calculation and ginv() corresponds to forming the generalized MP. inverse.
+// Similarly, instead of calculating sigma^2 as:
+// sigma^2 = ((y - X * cf).(y - X * cf)) / (n - tr((X' * X + embS)^-1 * X` * X))
+// We here calculate sigma^2 as:
+// sigma^2 = ((f - R * cf).(f - R * cf) + ((y).(y) - (f).(f))) / (n - tr((R2)^-1 * (R2)^-1' * R' * R))
+// Here n is the number of rows in X and ().() refers to the dot product between the vectors in () and ().
+void LambdaTerm::stepFellnerSchall(const MatrixXd &embS, const MatrixXd &cf, const MatrixXd &inv,
+                                   const MatrixXd &pInv, int &cIndex, double sigma)
+{
+
+    // Embed penalties belonging to this lambda term in a zero-padded matrix embJ of size embS.
+    int dimS = embS.rows();
+    MatrixXd embJ = MatrixXd::Zero(dimS, dimS);
+    this->embeddInS(embJ, cIndex);
+
+
+    // Calculate Numerator and Demoninator of the FS update, as described above.
+    double num = (pInv * embJ).trace() - (inv * embJ).trace();
+    MatrixXd denom = cf.transpose() * embJ * cf;
+
+    // Now calculate the lambda update for this term.
+    lambda = sigma * num / denom(0, 0) * lambda;
+}
