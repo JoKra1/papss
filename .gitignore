@@ -48,3 +48,6 @@ data/*
 gamms_pupil_helpers.R
 main.R
 src/tests.cpp
+
+# IDE related
+.vscode*

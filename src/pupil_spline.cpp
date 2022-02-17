@@ -177,19 +177,19 @@ void LambdaTerm::embeddInS(Eigen::MatrixXd &embS, int &cIndex)
 // We here calculate sigma^2 as:
 // sigma^2 = ((f - R * cf).(f - R * cf) + ((y).(y) - (f).(f))) / (n - tr((R2)^-1 * (R2)^-1' * R' * R))
 // Here n is the number of rows in X and ().() refers to the dot product between the vectors in () and ().
-void LambdaTerm::stepFellnerSchall(const MatrixXd &embS, const MatrixXd &cf, const MatrixXd &inv,
-                                   const MatrixXd &pInv, int &cIndex, double sigma)
+void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::MatrixXd &cf, const Eigen::MatrixXd &inv,
+                                   const Eigen::MatrixXd &pInv, int &cIndex, double sigma)
 {
 
     // Embed penalties belonging to this lambda term in a zero-padded matrix embJ of size embS.
     int dimS = embS.rows();
-    MatrixXd embJ = MatrixXd::Zero(dimS, dimS);
+    Eigen::MatrixXd embJ = Eigen::MatrixXd::Zero(dimS, dimS);
     this->embeddInS(embJ, cIndex);
 
 
     // Calculate Numerator and Demoninator of the FS update, as described above.
     double num = (pInv * embJ).trace() - (inv * embJ).trace();
-    MatrixXd denom = cf.transpose() * embJ * cf;
+    Eigen::MatrixXd denom = cf.transpose() * embJ * cf;
 
     // Now calculate the lambda update for this term.
     lambda = sigma * num / denom(0, 0) * lambda;
