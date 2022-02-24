@@ -227,7 +227,7 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
     Eigen::MatrixXd p = Rt * f;
 
     // Pre-calculate learning rate.
-    Eigen::MatrixXd QQ = Q.array() * Q.array(); // Element wise Q_i**2
+    Eigen::MatrixXd QQ = Q.array().pow(2); // Element wise Q_i**2 calculation
     double lr = 1 / sqrt(QQ.sum());
 
     // Add Penalty to R term.
@@ -247,18 +247,13 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
         // Take an accelerated gradient step.
         cf = ycf - (lr * ((Q * ycf) - p));
         
-        
-        
         // Enforce constraints.
         enforceConstraints(cf, constraints);
 
         // Calculate momentum.
-        double bk = (i) / (i + 3);
+        double bk = (static_cast<double>(i)) / (i + 3);
+
         ycf = cf + bk * (cf - prevCf);
-        
-        Rcpp:Rcout << ycf0 << "\n";
-        Rcpp:Rcout << ycf << "\n";
-        Rcpp:Rcout << prevCf << "\n";
 
         // Error calculation.
         Eigen::VectorXd err = f - R * cf;
