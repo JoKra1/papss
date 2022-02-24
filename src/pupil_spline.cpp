@@ -92,7 +92,7 @@ private:
 public:
     LambdaTerm(int n, int dim);
     const std::vector<std::unique_ptr<Penalty>> &getPenalties() const; // Will never change corresponding LambdaTerm instance.
-    void embeddInS(Eigen::MatrixXd &embS, int &cIndex);
+    void embeddInS(Eigen::MatrixXd &embS, int &cIndex, bool shouldParameterize);
     void stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::MatrixXd &cf, const Eigen::MatrixXd &inv,
                            const Eigen::MatrixXd &gInv, int &cIndex, double sigma);
 };
@@ -101,7 +101,7 @@ public:
 LambdaTerm::LambdaTerm(int n, int dim)
 {
     nPenalties = n;
-    lambda = 0.1;
+    lambda = 1.1;
 
     // Create associated penalty objects
     for (int i = 0; i < n; ++i)
@@ -135,7 +135,7 @@ const std::vector<std::unique_ptr<Penalty>> &LambdaTerm::getPenalties() const
 // cIndex corresponds to the starting index (row & column) at which we want to start embedding the penalties.
 // This is handy in case the model matrix contains un-penalized terms. Thus, any model matrix used by this implementation
 // should be ordered - starting with unpenalized columns/terms following by penalized terms.
-void LambdaTerm::embeddInS(Eigen::MatrixXd &embS, int &cIndex)
+void LambdaTerm::embeddInS(Eigen::MatrixXd &embS, int &cIndex, bool shouldParameterize)
 {
     /*
     As described in the constructor of the LambdaTerm class, we here loop over the
@@ -145,7 +145,12 @@ void LambdaTerm::embeddInS(Eigen::MatrixXd &embS, int &cIndex)
     for (const std::unique_ptr<Penalty> &S : penalties)
     {
         int dimS = S->getDim();
-        embS.block(cIndex, cIndex, dimS, dimS) = S->parameterizePenalty(lambda);
+        if(shouldParameterize){
+            embS.block(cIndex, cIndex, dimS, dimS) = S->parameterizePenalty(lambda);
+        } else {
+            embS.block(cIndex, cIndex, dimS, dimS) = S->getPenalty();
+        }
+        
         cIndex += dimS;
     }
 }
@@ -166,7 +171,7 @@ void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::Mat
     // Embed penalties belonging to this lambda term in a zero-padded matrix embJ of size embS.
     int dimS = embS.rows();
     Eigen::MatrixXd embJ = Eigen::MatrixXd::Zero(dimS, dimS);
-    this->embeddInS(embJ, cIndex);
+    this->embeddInS(embJ, cIndex, false);
 
     // Calculate Numerator and Demoninator of the FS update, as described above.
     double num = (gInv * embJ).trace() - (inv * embJ).trace();
@@ -174,8 +179,8 @@ void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::Mat
 
     // Now calculate the lambda update for this term.
     lambda = sigma * num / denom(0, 0) * lambda;
+    Rcpp::Rcout << lambda << "\n";
 }
-
 
 // ##################################### Functions #####################################
 
@@ -188,9 +193,9 @@ void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::Mat
 void enforceConstraints(Eigen::VectorXd &cf, const Rcpp::StringVector &constraints)
 {
 
-    for (int idx = 0; i < constraints.size(); ++i)
+    for (int idx = 0; idx < constraints.size(); ++idx)
     {
-        std::string c = Rcpp::as<std::string>(constraints(i));
+        std::string c = Rcpp::as<std::string>(constraints(idx));
         // Equal comparison returns 0
         // See: https://www.cplusplus.com/reference/string/string/compare/
         if (c.compare("c") == 0)
@@ -213,7 +218,7 @@ void enforceConstraints(Eigen::VectorXd &cf, const Rcpp::StringVector &constrain
 // NNLS. Gradient of the penalized least squares loss function is from
 // Wood (2017).
 void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::VectorXd &f,
-                  const Eigen::MatrixXd &embS, const std::vector<char> &constraints, double r,
+                  const Eigen::MatrixXd &embS, const Rcpp::StringVector &constraints, double r,
                   int maxiter, double tol)
 {
     // Notation follows https://angms.science/doc/NMF/nnls_pgd.pdf.
@@ -238,15 +243,22 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
 
     for (int i = 0; i < maxiter; ++i)
     {
+        
         // Take an accelerated gradient step.
         cf = ycf - (lr * ((Q * ycf) - p));
-
+        
+        
+        
         // Enforce constraints.
         enforceConstraints(cf, constraints);
 
         // Calculate momentum.
         double bk = (i) / (i + 3);
         ycf = cf + bk * (cf - prevCf);
+        
+        Rcpp:Rcout << ycf0 << "\n";
+        Rcpp:Rcout << ycf << "\n";
+        Rcpp:Rcout << prevCf << "\n";
 
         // Error calculation.
         Eigen::VectorXd err = f - R * cf;
@@ -261,11 +273,13 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
         }
 
         // Crude convergence check.
+        /*
         double absErrDiff = errDot > prevErr ? errDot - prevErr : prevErr - errDot;
         if (absErrDiff < tol)
         {
             break;
         }
+        */
 
         // Prepare next iter.
         prevCf = cf;
@@ -273,10 +287,11 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
     }
 }
 
-// Fits an additive model based on the stable LS solutions discussed in Wood (2011,2017). 
+// Fits an additive model based on the stable LS solutions discussed in Wood (2011,2017).
+// [[Rcpp::export]]
 Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::VectorXd> &initCf,
-                        const Rcpp::StringVector &constraints, const std::vector<int> &lambdaTermFreq, int startIndex,
-                        int maxIter, int maxIterOptim, double tol = 0.001)
+                        const Rcpp::StringVector &constraints, const Rcpp::IntegerVector &lambdaTermFreq, const Rcpp::IntegerVector &lambdaTermDim,
+                        int startIndex,int maxIter, int maxIterOptim, double tol = 0.001)
 {
     // Get dimension of X for re-use later.
     int rowsX = X.rows();
@@ -311,9 +326,10 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
 
     // Prepare lambda terms.
     std::vector<std::unique_ptr<LambdaTerm>> lambdaContainer;
-    for (int freq : lambdaTermFreq)
+
+    for (int lIdx = 0; lIdx < lambdaTermFreq.size(); ++lIdx)
     {
-        std::unique_ptr<LambdaTerm> LDT = std::make_unique<LambdaTerm>(freq, colsX);
+        std::unique_ptr<LambdaTerm> LDT = std::make_unique<LambdaTerm>(lambdaTermFreq(lIdx), lambdaTermDim(lIdx));
         lambdaContainer.push_back(std::move(LDT));
     }
 
@@ -329,6 +345,8 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
     // Now iteratively optimize cf and then the current smoothness penalties.
     for (int i = 0; i < maxIter; ++i)
     {
+        Rcpp::Rcout << "Iter: " << i << "\n";
+        
         // Create embedded S term.
         int cInd = startIndex;
         Eigen::MatrixXd embS = Eigen::MatrixXd::Zero(colsX, colsX);
@@ -336,12 +354,12 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
         // Now embed all lambda terms into S.
         for (const std::unique_ptr<LambdaTerm> &LDT : lambdaContainer)
         {
-            (LDT)->embeddInS(embS, cInd);
+            (LDT)->embeddInS(embS, cInd, true);
         }
 
         // Optimize for cf given current lambda values.
         agdTOptimize(cf, R, f, embS, constraints, r, maxIterOptim, tol);
-
+        
         // Now calculate the next step in the stable LS approach:
         // QR decomposition based on R + Cholesky factor of embS.
 
@@ -358,15 +376,15 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
         // The .abs() is a cheat here so that the root does not fail.
         // This is necessary since if embS is not positive semidefinite
         // D will contain very small negative elements.
-        Eigen::VectorXd D = D.array().abs().sqrt();
+        Eigen::VectorXd D = ldlt.vectorD().array().abs().sqrt();
 
         // Final factor
         Eigen::MatrixXd L1 = PL * D.asDiagonal();
 
         // Concatenate R and L1
         // See: https://stackoverflow.com/questions/21496157/eigen-how-to-concatenate-matrix-along-a-specific-dimension
-        Eigen::MatrixXd RL1(colsX + L1.rows(), colsX);
-        RL1 << R, L1;
+        Eigen::MatrixXd RL1(colsX + L1.cols(), colsX);
+        RL1 << R, L1.transpose();
 
         // Now form the next QR decomposition (See above).
         Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr2(RL1);
@@ -398,7 +416,8 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
         Eigen::VectorXd res = f2 - R2 * cf;
         double errDot = res.dot(res) + r2;
         double sigma = errDot / (rowsX - (Inv * R.transpose() * R).trace());
-
+        //Rcpp::Rcout << sigma << "\n";
+        
         // Crude convergence control
         double absErrDiff = errDot > prevErr ? errDot - prevErr : prevErr - errDot;
         if (absErrDiff < tol)
@@ -410,6 +429,7 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
 
         // Now we can update all lamda terms.
         cInd = startIndex;
+        
         for (const std::unique_ptr<LambdaTerm> &LDT : lambdaContainer)
         {
             // Update individual term.

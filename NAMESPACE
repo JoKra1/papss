@@ -1,3 +1,8 @@
 useDynLib(papss)
 import(RcppEigen)
 importFrom(Rcpp, evalCpp)
+export(create_constant_term)
+export(create_slope_term)
+export(create_spike_matrix_term)
+export(term_by_factor)
+export(pupil_solve)
