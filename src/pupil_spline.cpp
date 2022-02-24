@@ -251,6 +251,7 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
         enforceConstraints(cf, constraints);
 
         // Calculate momentum.
+        // See: https://en.cppreference.com/w/cpp/language/static_cast
         double bk = (static_cast<double>(i)) / (i + 3);
 
         ycf = cf + bk * (cf - prevCf);
@@ -268,13 +269,12 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
         }
 
         // Crude convergence check.
-        /*
         double absErrDiff = errDot > prevErr ? errDot - prevErr : prevErr - errDot;
         if (absErrDiff < tol)
         {
             break;
         }
-        */
+        
 
         // Prepare next iter.
         prevCf = cf;
