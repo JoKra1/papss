@@ -51,8 +51,6 @@ public:
 };
 
 // Constructor for IdentityPenalty.
-// Parameters:
-// int dim: dimensionalty (rows & cols) of the penalty
 IdentityPenalty::IdentityPenalty(int dim)
 {
     this->dim = dim;
@@ -187,19 +185,21 @@ void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::Mat
 // we require all 'attention spikes', i.e., the weights in our cf vector to be positive.
 // Thus, we unfortunately cannot rely on a closed solution for our optimization problem but have to
 // resort to perform projected gradient optimization, as discussed here: https://angms.science/doc/NMF/nnls_pgd.pdf.
-void enforceConstraints(Eigen::VectorXd &cf, const std::vector<char> &constraints)
+void enforceConstraints(Eigen::VectorXd &cf, const Rcpp::StringVector &constraints)
 {
-    int idx = 0;
-    for (char c : constraints)
+
+    for (int idx = 0; i < constraints.size(); ++i)
     {
-        if (c == 'c')
+        std::string c = Rcpp::as<std::string>(constraints(i));
+        // Equal comparison returns 0
+        // See: https://www.cplusplus.com/reference/string/string/compare/
+        if (c.compare("c") == 0)
         {
             if (cf(idx) < 0)
             {
                 cf(idx) = 0;
             }
         }
-        ++idx;
     }
 }
 
@@ -274,7 +274,9 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
 }
 
 // Fits an additive model based on the stable LS solutions discussed in Wood (2011,2017). 
-Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::VectorXd> &initCf, const std::vector<char> &constraints, const std::vector<int> &lambdaTermFreq, int startIndex, int maxIter, int maxIterOptim, double tol = 0.001)
+Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::VectorXd> &initCf,
+                        const Rcpp::StringVector &constraints, const std::vector<int> &lambdaTermFreq, int startIndex,
+                        int maxIter, int maxIterOptim, double tol = 0.001)
 {
     // Get dimension of X for re-use later.
     int rowsX = X.rows();
