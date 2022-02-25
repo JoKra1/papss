@@ -145,12 +145,15 @@ void LambdaTerm::embeddInS(Eigen::MatrixXd &embS, int &cIndex, bool shouldParame
     for (const std::unique_ptr<Penalty> &S : penalties)
     {
         int dimS = S->getDim();
-        if(shouldParameterize){
+        if (shouldParameterize)
+        {
             embS.block(cIndex, cIndex, dimS, dimS) = S->parameterizePenalty(lambda);
-        } else {
+        }
+        else
+        {
             embS.block(cIndex, cIndex, dimS, dimS) = S->getPenalty();
         }
-        
+
         cIndex += dimS;
     }
 }
@@ -183,7 +186,6 @@ void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::Mat
 }
 
 // ##################################### Functions #####################################
-
 
 // Enforces positivity constraints on a vector. Based on the work by
 // Hoeks & Levelt (1993): 'Pupillary dilation as a measure of attention: A quantitative system analysis'
@@ -243,10 +245,10 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
 
     for (int i = 0; i < maxiter; ++i)
     {
-        
+
         // Take an accelerated gradient step.
         cf = ycf - (lr * ((Q * ycf) - p));
-        
+
         // Enforce constraints.
         enforceConstraints(cf, constraints);
 
@@ -274,7 +276,6 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
         {
             break;
         }
-        
 
         // Prepare next iter.
         prevCf = cf;
@@ -286,7 +287,7 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
 // [[Rcpp::export]]
 Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::VectorXd> &initCf,
                         const Rcpp::StringVector &constraints, const Rcpp::IntegerVector &lambdaTermFreq, const Rcpp::IntegerVector &lambdaTermDim,
-                        int startIndex,int maxIter, int maxIterOptim, double tol = 0.001)
+                        int startIndex, int maxIter, int maxIterOptim, double tol = 0.001)
 {
     // Get dimension of X for re-use later.
     int rowsX = X.rows();
@@ -341,7 +342,7 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
     for (int i = 0; i < maxIter; ++i)
     {
         Rcpp::Rcout << "Iter: " << i << "\n";
-        
+
         // Create embedded S term.
         int cInd = startIndex;
         Eigen::MatrixXd embS = Eigen::MatrixXd::Zero(colsX, colsX);
@@ -354,7 +355,7 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
 
         // Optimize for cf given current lambda values.
         agdTOptimize(cf, R, f, embS, constraints, r, maxIterOptim, tol);
-        
+
         // Now calculate the next step in the stable LS approach:
         // QR decomposition based on R + Cholesky factor of embS.
 
@@ -411,8 +412,8 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
         Eigen::VectorXd res = f2 - R2 * cf;
         double errDot = res.dot(res) + r2;
         double sigma = errDot / (rowsX - (Inv * R.transpose() * R).trace());
-        //Rcpp::Rcout << sigma << "\n";
-        
+        // Rcpp::Rcout << sigma << "\n";
+
         // Crude convergence control
         double absErrDiff = errDot > prevErr ? errDot - prevErr : prevErr - errDot;
         if (absErrDiff < tol)
@@ -424,13 +425,12 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
 
         // Now we can update all lamda terms.
         cInd = startIndex;
-        
+
         for (const std::unique_ptr<LambdaTerm> &LDT : lambdaContainer)
         {
             // Update individual term.
             (LDT)->stepFellnerSchall(embS, cf, Inv, gInv, cInd, sigma);
         }
-        
     }
     return cf;
 }
