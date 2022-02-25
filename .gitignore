@@ -48,6 +48,8 @@ data/*
 gamms_pupil_helpers.R
 main.R
 src/tests.cpp
+/renv
+renv.lock
 
 # IDE related
 .vscode*
