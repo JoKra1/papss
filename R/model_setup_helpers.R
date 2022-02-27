@@ -101,6 +101,8 @@ create_spike_matrix_term <- function(time,pulse_locations,n,t_max,f) {
 #' See: Wood, S. N. (2017). Generalized Additive Models: An Introduction with R,
 #' Second Edition (2nd ed.). Chapman and Hall/CRC.
 #' 
+#' See 'by' at: https://www.rdocumentation.org/packages/mgcv/versions/1.8-38/topics/s
+#' 
 #' Code is based on: https://stats.stackexchange.com/questions/110472/how-exactly-is-the-sum-or-mean-centering-constraint-for-splines-also-w-r-t-g
 #' 
 #' @param term A slope, splike_matrix, or intercept.

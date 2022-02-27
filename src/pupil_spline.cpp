@@ -71,17 +71,18 @@ Eigen::MatrixXd IdentityPenalty::parameterizePenalty(double l)
 }
 
 // LambdaTerm class. As discussed in Wood (2017), multiple penalties (for individual
-// terms) can share the same lambda value (e.g., this is achieved with the 'by' keyword
-// in mgcv). Thus, the LambdaTerm class stores smart pointers to all the penalties
+// terms) can share the same lambda value (e.g., this is achieved with the 'id' keyword
+// in mgcv, see link below).
+// Thus, the LambdaTerm class stores smart pointers to all the penalties
 // associated with this lambda value. It comes with a method to extract these penalties
 // (Not sure whether that is needed, just thought it might be handy..), a method to embedd these
 // penalties in a zero-padded matrix (S in Wood 2017) to represent them in quadratic form cf' * S * cf
 // where cf contains a weight for each column in the model matrix (Wood, 2017 s. 4.3.1).
 // This same method can also be used to embed multiple lambda terms in the same zero-padded matrix, which is
 // required for the generalized Fellner Schall update described in Wood & Fasiolo (2017):
-// 'A generalized Fellner-Schall method for smoothing parameter optimization with application
-// to Tweedie location, scale and shape models'
 // This update is also implemented as a method here so that the lambda values of each term can be updated.
+//
+// See: 'id' at https://www.rdocumentation.org/packages/mgcv/versions/1.8-38/topics/s
 class LambdaTerm
 {
 private:
@@ -161,12 +162,11 @@ void LambdaTerm::embeddInS(Eigen::MatrixXd &embS, int &cIndex, bool shouldParame
 // Perform a generalized Fellner Schall update step for a lambda term. This update rule is
 // discussed in Wood & Fasiolo (2017). In the paper, the authors provide the update in terms
 // of X and y (as well as X and z for generalized models). However, as discussed in Wood (2017)
-// and Wood (2011): 'Fast stable restricted maximum likelihood and marginal likelihood estimation
-// of semiparametric generalized linear models: Estimation of Semiparametric Generalized Linear Models'
-// the explicit calculation of (X' * X + embS)^-1 is undesirable. Thus we here invoke the update on
-// 'updated terms' (see code below for a quick overview and Wood, 2011; Wood, 2017 for more details)
-// obtained after repeated QR factorization and Cholesky decomposition, as described extensively
-// in Wood (2011, 2017) to improve on the ill-conditioned nature of the former term.
+// and Wood (2011): the explicit calculation of (X' * X + embS)^-1 is undesirable.
+// Thus we here invoke the update on 'updated terms' (see code below for a quick overview
+// and Wood, 2011; Wood, 2017 for more details) obtained after repeated QR factorization
+// and Cholesky decomposition, as described extensively in Wood (2011, 2017) to improve on
+// the ill-conditioned nature of the former term.
 void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::MatrixXd &cf, const Eigen::MatrixXd &inv,
                                    const Eigen::MatrixXd &gInv, int &cIndex, double sigma)
 {
@@ -187,11 +187,10 @@ void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::Mat
 
 // ##################################### Functions #####################################
 
-// Enforces positivity constraints on a vector. Based on the work by
-// Hoeks & Levelt (1993): 'Pupillary dilation as a measure of attention: A quantitative system analysis'
+// Enforces positivity constraints on a vector. Based on the work by Hoeks & Levelt (1993)
 // we require all 'attention spikes', i.e., the weights in our cf vector to be positive.
 // Thus, we unfortunately cannot rely on a closed solution for our optimization problem but have to
-// resort to perform projected gradient optimization, as discussed here: https://angms.science/doc/NMF/nnls_pgd.pdf.
+// resort to perform projected gradient optimization, as discussed by Ang (2020a; 2020b)
 void enforceConstraints(Eigen::VectorXd &cf, const Rcpp::StringVector &constraints)
 {
 
@@ -213,8 +212,9 @@ void enforceConstraints(Eigen::VectorXd &cf, const Rcpp::StringVector &constrain
 // Gradient descent optimizer with momentum and restarts. The momentum update
 // rule is the one discussed by Sutskever et al. (2013) that is also discussed (in slightly
 // alternated form) in the lecture series by Ang (2020). Allows for a projection step
-// to solve constraine doptimization problems (e.g., Non-negative least squares [NNLS] - see Bolduc et al. (2017)).
-// Further permits for optimizing a penalized NNLS in case embS is different from a zero matrix.
+// to solve constrained optimization problems (e.g., Non-negative least squares [NNLS] -
+// see Bolduc et al. (2017) or Ang (2020a; 2020b)). Further permits for optimizing a
+// penalized NNLS in case embS is different from a zero matrix.
 //
 // For discussion of why momentum helps/matters and the exact momentum rule used here
 // see Sutskever et al. (2013). The algorithm and code itself is based on the
@@ -241,9 +241,11 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
     Eigen::VectorXd ycf0 = Eigen::VectorXd(cf);
     Eigen::VectorXd ycf = ycf0;
     Eigen::VectorXd prevCf = ycf0;
+
     // Initialize alpha coefficient from Sutskever et al. (2013)
     double a0 = 1;
     double ai = a0;
+
     // Error increase check.
     double prevErr = std::numeric_limits<double>::max();
 
@@ -263,7 +265,7 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
         // Accelerate coefficient update.
         ycf = cf + ((ai - 1) / aii) * (cf - prevCf);
 
-        // Prepare next momentum.
+        // Prepare next momentum term.
         ai = aii;
 
         // Error calculation.
@@ -347,7 +349,7 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
     // Error increase check.
     double prevErr = std::numeric_limits<double>::max();
 
-    // Now iteratively optimize cf and then the current smoothness penalties.
+    // Now iteratively optimize cf and then the smoothness penalties.
     for (int i = 0; i < maxIter; ++i)
     {
         Rcpp::Rcout << "Iter: " << i << "\n";
