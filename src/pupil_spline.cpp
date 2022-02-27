@@ -210,20 +210,22 @@ void enforceConstraints(Eigen::VectorXd &cf, const Rcpp::StringVector &constrain
     }
 }
 
-// Gradient descent optimizer with momentum and restarts and Paul Tseng's momentum update
-// rule that allows to optimize a penalized least squares problem.
-// Further permits for optimizing a penalized Non-negative least squares problem
-// (penalized NNLS) by means of projection (see link below for details).
-// For discussion of algorithm see: https://angms.science/doc/NMF/nnls_pgd.pdf
-// code is based on the algorithm/pseudo-code discussed in aforementioned
-// source and has been adapted to solve a penalized NNLS instead of a simple
-// NNLS. Gradient of the penalized least squares loss function is from
-// Wood (2017).
+// Gradient descent optimizer with momentum and restarts. The momentum update
+// rule is the one discussed by Sutskever et al. (2013) that is also discussed (in slightly
+// alternated form) in the lecture series by Ang (2020). Allows for a projection step
+// to solve constraine doptimization problems (e.g., Non-negative least squares [NNLS] - see Bolduc et al. (2017)).
+// Further permits for optimizing a penalized NNLS in case embS is different from a zero matrix.
+//
+// For discussion of why momentum helps/matters and the exact momentum rule used here
+// see Sutskever et al. (2013). The algorithm and code itself is based on the
+// pseudo-code from the slides in the lecture series by Ang (2020) and has been
+// adapted to solve a penalized NNLS instead of a simple NNLS. The gradient of the
+// penalized least squares loss function is from Wood (2017).
 void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::VectorXd &f,
                   const Eigen::MatrixXd &embS, const Rcpp::StringVector &constraints, double r,
                   int maxiter, double tol)
 {
-    // Notation follows https://angms.science/doc/NMF/nnls_pgd.pdf.
+    // Notation follows the one by Ang (2020).
     Eigen::MatrixXd Rt = R.transpose();
     Eigen::MatrixXd Q = Rt * R;
     Eigen::MatrixXd p = Rt * f;
@@ -239,24 +241,30 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
     Eigen::VectorXd ycf0 = Eigen::VectorXd(cf);
     Eigen::VectorXd ycf = ycf0;
     Eigen::VectorXd prevCf = ycf0;
-
+    // Initialize alpha coefficient from Sutskever et al. (2013)
+    double a0 = 1;
+    double ai = a0;
     // Error increase check.
     double prevErr = std::numeric_limits<double>::max();
 
     for (int i = 0; i < maxiter; ++i)
     {
 
-        // Take an accelerated gradient step.
+        // Take a gradient step.
         cf = ycf - (lr * ((Q * ycf) - p));
 
         // Enforce constraints.
         enforceConstraints(cf, constraints);
 
-        // Calculate momentum.
-        // See: https://en.cppreference.com/w/cpp/language/static_cast
-        double bk = (static_cast<double>(i)) / (i + 3);
+        // Calculate momentum update based on alpha coefficient discussed
+        // in Sutskever et al. (2013)
+        double aii = 0.5 * (1 + sqrt(4 * pow(ai,2) + 1));
 
-        ycf = cf + bk * (cf - prevCf);
+        // Accelerate coefficient update.
+        ycf = cf + ((ai - 1) / aii) * (cf - prevCf);
+
+        // Prepare next momentum.
+        ai = aii;
 
         // Error calculation.
         Eigen::VectorXd err = f - R * cf;
@@ -268,6 +276,7 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
             cf = prevCf - (lr * ((Q * prevCf) - p));
             enforceConstraints(cf, constraints);
             ycf = cf;
+            ai = a0;
         }
 
         // Crude convergence check.
