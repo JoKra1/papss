@@ -53,3 +53,5 @@ renv.lock
 
 # IDE related
 .vscode*
+.Rprofile
+.Rbuildignore
