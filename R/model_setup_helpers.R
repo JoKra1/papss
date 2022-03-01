@@ -142,23 +142,23 @@ term_by_factor <- function(term,fact) {
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Parameter defined by Wierda et al. (scaling factor)
 #' 
-WP_SHARED_NNLS_model_setup <- function(time,subs,pulse_locations,n,t_max,f) {
+WIER_SHARED_NNLS_model_setup <- function(time,subs,pulse_locations,n,t_max,f) {
   
   # Extract number of subjects
   n_subs <- length(unique(subs))
   # Setup model matrix
   slope <- create_slope_term(unique(time),n_subs)
   spike_matrix <- create_spike_matrix_term(time,pulse_locations,n,t_max,f)
-  slopeMatrix <- term_by_factor(slope,subs)
+  slope_matrix <- term_by_factor(slope,subs)
   spike_matrix_by <- term_by_factor(spike_matrix,subs)
   
-  trainingsMatrix <- cbind(slopeMatrix,spike_matrix_by)
+  trainingsMatrix <- cbind(slope_matrix,spike_matrix_by)
   
   # Setup Penalty definition to be implemented by c++
-  # n_subs individual slope penalties plus one
+  # one individual slope penaltiy plus one
   # shared penalty for all subjects (expressed on bases)
   freq <- c(1, n_subs)
-  # n_subs individual penalties are of size 1x1. Also, Each of the shared
+  # individual penalty is of size n_subs*n_subs. Also, Each of the shared
   # penalties is of size length(pulse_locations)*length(pulse_locations)
   size <- c(n_subs,length(pulse_locations))
   
@@ -174,21 +174,149 @@ WP_SHARED_NNLS_model_setup <- function(time,subs,pulse_locations,n,t_max,f) {
               "constraints"=constraints))
 }
 
+#' Creates trainings matrix and penalties for a fully penalized
+#' model inspired by the one used by Denison et al., (2020).
+#' Like by Wierda et al. (2012) separate sets of coefficients are estimated per
+#' subject with the h_basis terms. All those coefficients are again constrained
+#' to be non-negative. Model also includes the intercept terms for each subject that
+#' Denison et al. (2012) introduced. These are not constrained - since their
+#' primary purpose was to account for pupil trajectories that were overall just
+#' containing very negative samples (relative to baseline).
+#' 
+#' This model differs from the one by Wierda et al. (2012) and Denison et al., (2020)
+#' in that it penalizes the coefficients corresponding to the h_basis terms.
+#' Specifically, it enforces a single penalty term shared by all subjects (e.g., this is
+#' similar to the 'fs' basis in mgcv or can be achieved by using the 'id' keyword
+#' in a 'by' factor smooth.). The form of the penalty expressed on all of the
+#' basis functions is a simple identity matrix. We here also penalize all intercept
+#' terms, again with a single penalty (this time applied to a single matrix though).
+#' 
+#' @param time A numeric vector containing positive time values in ms
+#' @param subs A factor vector containing subject identifiers
+#' @param pulse_locations A numeric vector containing index values of pulse loc.
+#' @param n Parameter defined by Hoeks & Levelt (number of laters)
+#' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
+#' @param f Parameter defined by Wierda et al. (scaling factor)
+#' 
+DEN_SHARED_NNLS_model_setup <- function(time,subs,pulse_locations,n,t_max,f) {
+  
+  # Extract number of subjects
+  n_subs <- length(unique(subs))
+  # Setup model matrix
+  intercept <- create_constant_term(time)
+  spike_matrix <- create_spike_matrix_term(time,pulse_locations,n,t_max,f)
+  intercept_matrix <- term_by_factor(intercept,subs)
+  spike_matrix_by <- term_by_factor(spike_matrix,subs)
+  
+  trainingsMatrix <- cbind(intercept_matrix,spike_matrix_by)
+  
+  # Setup Penalty definition to be implemented by c++
+  # one individual intercept penalty plus one
+  # shared penalty for all subjects (expressed on bases)
+  freq <- c(1, n_subs)
+  # individual penalty is of size of size n_subs*n_subs. Also, Each of the shared
+  # penalties is of size length(pulse_locations)*length(pulse_locations)
+  size <- c(n_subs,length(pulse_locations))
+  
+  
+  # Define positive constraints
+  constraints <- rep("c",ncol(trainingsMatrix))
+  constraints[1:n_subs] <- "u" # All parametric terms are unconstrained
+  
+  return(list("X"=trainingsMatrix,
+              "Penalties"=list("freq"=freq,
+                               "size"=size,
+                               "startIndex"=0),
+              "constraints"=constraints))
+}
 
+#' Creates trainings matrix and penalties for a fully penalized
+#' model that combines elements of both the models by Denison et al., (2020)
+#' and Wierda et al. (2012).
+#'
+#' Like by Wierda et al. (2012) separate sets of coefficients are estimated per
+#' subject with the h_basis terms. All those coefficients are again constrained
+#' to be non-negative. Model also includes the intercept terms for each subject that
+#' Denison et al. (2012) introduced as well as the slope term introduced by
+#' Wierda et al., (2012). These are not constrained - since their
+#' primary purpose was to account for pupil trajectories that were overall just
+#' containing very negative samples (relative to baseline) and drifts in the
+#' trajectories respectively.
+#' 
+#' This model differs from the one by Wierda et al. (2012) and Denison et al., (2020)
+#' in that it penalizes the coefficients corresponding to the h_basis terms.
+#' Specifically, it enforces a single penalty term shared by all subjects (e.g., this is
+#' similar to the 'fs' basis in mgcv or can be achieved by using the 'id' keyword
+#' in a 'by' factor smooth.). The form of the penalty expressed on all of the
+#' basis functions is a simple identity matrix. We here also penalize all intercept
+#' and slope terms, again with a single penalty
+#' (this time applied to a single matrix though).
+#' 
+#' @param time A numeric vector containing positive time values in ms
+#' @param subs A factor vector containing subject identifiers
+#' @param pulse_locations A numeric vector containing index values of pulse loc.
+#' @param n Parameter defined by Hoeks & Levelt (number of laters)
+#' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
+#' @param f Parameter defined by Wierda et al. (scaling factor)
+#' 
+WIER_DEN_SHARED_NNLS_model_setup <- function(time,subs,pulse_locations,n,t_max,f) {
+  
+  # Extract number of subjects
+  n_subs <- length(unique(subs))
+  # Setup model matrix
+  intercept <- create_constant_term(time)
+  slope <- create_slope_term(unique(time),n_subs)
+  spike_matrix <- create_spike_matrix_term(time,pulse_locations,n,t_max,f)
+  intercept_matrix <- term_by_factor(intercept,subs)
+  slope_matrix <- term_by_factor(slope,subs)
+  spike_matrix_by <- term_by_factor(spike_matrix,subs)
+  
+  trainingsMatrix <- cbind(intercept_matrix,slope_matrix,spike_matrix_by)
+  
+  # Setup Penalty definition to be implemented by c++
+  # one individual intercept  and slope penalty plus one
+  # shared penalty for all subjects (expressed on bases)
+  freq <- c(1, 1, n_subs)
+  # individual penalties are of size n_subs*n_subs. Also, Each of the shared
+  # penalties is of size length(pulse_locations)*length(pulse_locations)
+  size <- c(n_subs, n_subs, length(pulse_locations))
+  
+  
+  # Define positive constraints
+  constraints <- rep("c",ncol(trainingsMatrix))
+  constraints[1:(2 * n_subs)] <- "u" # All parametric terms are unconstrained
+  
+  return(list("X"=trainingsMatrix,
+              "Penalties"=list("freq"=freq,
+                               "size"=size,
+                               "startIndex"=0),
+              "constraints"=constraints))
+}
 
 #' The main wrapper function that is also exposed. Fits the desired model.
 pupil_solve <- function(pulse_locations,real_locations,
-                        data,model="WP_SHARED",n=10.1,
+                        data,model="WIER_SHARED",n=10.1,
                         t_max=930,f=1/(10^24),
                         maxiter_inner=10000,maxiter_outer=25,
                         convergence_tol=1e-06) {
   
   
-  # Wierda et al. (2012) model, but with shared penalty!
-  if(model == "WP_SHARED") {
-    setup <- WP_SHARED_NNLS_model_setup(data$time,data$subject,
-                                        pulse_locations,
-                                        n,t_max,f)
+  
+  if(model == "WIER_SHARED") {
+    # Wierda et al. (2012) model, but with shared penalty!
+    setup <- WIER_SHARED_NNLS_model_setup(data$time,data$subject,
+                                          pulse_locations,
+                                          n,t_max,f)
+  } else if (model == "DEN_SHARED") {
+    # Denison et al. (2012) model, but with shared penalty!
+    setup <- DEN_SHARED_NNLS_model_setup(data$time,data$subject,
+                                         pulse_locations,
+                                         n,t_max,f)
+  } else if (model == "WIER_DEN_SHARED") {
+    # Combined model with shared penalty!
+    setup <- WIER_DEN_SHARED_NNLS_model_setup(data$time,data$subject,
+                                              pulse_locations,
+                                              n,t_max,f)
   } else {
     stop("Model not specified.")
   }
