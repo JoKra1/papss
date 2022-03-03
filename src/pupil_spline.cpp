@@ -398,13 +398,8 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
         Eigen::MatrixXd R2 = qr2.matrixR().template triangularView<Eigen::Upper>();
         R2 = R2.block(0, 0, colsX, colsX).eval();
         
-        // ToDo: This should ideally not be done here, since we ideally want
-        // to retain the triangular nature of R2 up to this point until we have
-        // calculated the inverse. So a better idea would be to pivot the
-        // coefficients instead, then perform the FS update, and then un-pivot
-        // the coefficients again.
+        // Extract permutation matrix but do not reverse pivot on R2!
         Eigen::MatrixXd P2 = qr2.colsPermutation();
-        R2 *= P2.transpose();
 
         // Q here needs an additional update that was not necessary in the first step.
         Eigen::MatrixXd Q2 = qr2.householderQ().setLength(qr2.nonzeroPivots()) * Eigen::MatrixXd::Identity(RL1.rows(), colsX);
@@ -413,8 +408,10 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
         // Now form the inverse of R2 (which is really the root of the inverse of X' %*% X + embS - see Wood (2017))
         Eigen::MatrixXd rInv = R2.inverse();
 
-        // Now we can calculate the actual inverse, not the root, of the term above:
-        Eigen::MatrixXd Inv = rInv * rInv.transpose();
+        // Now we can calculate the actual inverse, not the root, of the term above.
+        // After consulting Wood (2017) again I decided to apply the pivoting
+        // here, because then the remaining code can be used as is.
+        Eigen::MatrixXd Inv = P2 * rInv * rInv.transpose() * P2.transpose();
 
         // We also need the pseudo inverse of embS for the EFS update.
         // See: https://eigen.tuxfamily.org/dox/classEigen_1_1CompleteOrthogonalDecomposition.html
