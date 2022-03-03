@@ -397,6 +397,12 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
         Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr2(RL1);
         Eigen::MatrixXd R2 = qr2.matrixR().template triangularView<Eigen::Upper>();
         R2 = R2.block(0, 0, colsX, colsX).eval();
+        
+        // ToDo: This should ideally not be done here, since we ideally want
+        // to retain the triangular nature of R2 up to this point until we have
+        // calculated the inverse. So a better idea would be to pivot the
+        // coefficients instead, then perform the FS update, and then un-pivot
+        // the coefficients again.
         Eigen::MatrixXd P2 = qr2.colsPermutation();
         R2 *= P2.transpose();
 

@@ -15,9 +15,9 @@ You need to install RTools to be able to build this package. Instructions can be
 
 ## ToDo:
 - Add examples & vignette
-- Implement a template for a model replacing the slope terms by intercept terms, as described by Denison et al. (2020)
 - Return more data from solveAM
 - Implement difference penalty (Eilers & Marx, 1996; Wood, 2017)
+- Instead of un-pivoting the R matrix before calculating the inverse apply pivoting to the coefficients for the duration of the GFS update
 
 ## References:
 

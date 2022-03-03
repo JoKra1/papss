@@ -302,7 +302,7 @@ pupil_solve <- function(pulse_locations,real_locations,
   
   
   
-  if(model == "WIER_SHARED") {
+  if (model == "WIER_SHARED") {
     # Wierda et al. (2012) model, but with shared penalty!
     setup <- WIER_SHARED_NNLS_model_setup(data$time,data$subject,
                                           pulse_locations,
