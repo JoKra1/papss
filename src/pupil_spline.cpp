@@ -423,7 +423,7 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
         double r2 = y.dot(y) - f2.dot(f2);
 
         // Finally we need to calculate the current estimate of sigma^2.
-        Eigen::VectorXd res = f2 - R2 * cf;
+        Eigen::VectorXd res = f2 - R2 * P2.transpose() * cf;
         double errDot = res.dot(res) + r2;
         double sigma = errDot / (rowsX - (Inv * R.transpose() * R).trace());
         // Rcpp::Rcout << sigma << "\n";
