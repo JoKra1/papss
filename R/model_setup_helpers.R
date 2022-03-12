@@ -51,6 +51,7 @@ h_basis <- function(i,time,pulse_locations,n,t_max,f) {
 #' Can be manipulated via "by" argument as done in mgcv.
 #' 
 #' @param time A numeric vector containing positive time values in ms
+#' @export
 create_constant_term <- function(time) {
   intercept <- rep(1,length(time))
   return(intercept)
@@ -64,6 +65,7 @@ create_constant_term <- function(time) {
 #' 
 #' @param time_unq A numeric vector containing unique positive time values in ms
 #' @param n_cat Integer, number of categories for which slope should be repeated.
+#' @export
 create_slope_term <- function(time_unq,n_cat) {
   slope <- 1:length(time_unq)
   slope <- rep(slope,n_cat)
@@ -83,7 +85,7 @@ create_slope_term <- function(time_unq,n_cat) {
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Parameter defined by Wierda et al. (scaling factor)
-#' 
+#' @export
 create_spike_matrix_term <- function(time,pulse_locations,n,t_max,f) {
   
   spike_matrix <- matrix(nrow = length(time),ncol = (length(pulse_locations)))
@@ -107,6 +109,7 @@ create_spike_matrix_term <- function(time,pulse_locations,n,t_max,f) {
 #' 
 #' @param term A slope, splike_matrix, or intercept.
 #' @param fact A factor variable.
+#' @export
 term_by_factor <- function(term,fact) {
   
   term_by <- NULL
@@ -141,7 +144,6 @@ term_by_factor <- function(term,fact) {
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Parameter defined by Wierda et al. (scaling factor)
-#' 
 WIER_SHARED_NNLS_model_setup <- function(time,subs,pulse_locations,n,t_max,f) {
   
   # Extract number of subjects
@@ -197,7 +199,6 @@ WIER_SHARED_NNLS_model_setup <- function(time,subs,pulse_locations,n,t_max,f) {
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Parameter defined by Wierda et al. (scaling factor)
-#' 
 DEN_SHARED_NNLS_model_setup <- function(time,subs,pulse_locations,n,t_max,f) {
   
   # Extract number of subjects
@@ -258,7 +259,6 @@ DEN_SHARED_NNLS_model_setup <- function(time,subs,pulse_locations,n,t_max,f) {
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Parameter defined by Wierda et al. (scaling factor)
-#' 
 WIER_DEN_SHARED_NNLS_model_setup <- function(time,subs,pulse_locations,n,t_max,f) {
   
   # Extract number of subjects
@@ -294,6 +294,7 @@ WIER_DEN_SHARED_NNLS_model_setup <- function(time,subs,pulse_locations,n,t_max,f
 }
 
 #' The main wrapper function that is also exposed. Fits the desired model.
+#' @export
 pupil_solve <- function(pulse_locations,real_locations,
                         data,model="WIER_SHARED",n=10.1,
                         t_max=930,f=1/(10^24),

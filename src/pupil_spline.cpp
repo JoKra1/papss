@@ -294,7 +294,7 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
     }
 }
 
-// Fits an additive model based on the stable LS solutions discussed in Wood (2011,2017).
+//' Fits an additive model based on the stable LS solutions discussed in Wood (2011,2017).
 // [[Rcpp::export]]
 Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::VectorXd> &initCf,
                         const Rcpp::StringVector &constraints, const Rcpp::IntegerVector &lambdaTermFreq, const Rcpp::IntegerVector &lambdaTermDim,
