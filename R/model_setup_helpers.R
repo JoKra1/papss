@@ -24,12 +24,19 @@
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Parameter defined by Wierda et al. (scaling factor)
 h_basis <- function(i,time,pulse_locations,n,t_max,f) {
+  
+  # We need to make sure that bases towards the end do not 'contaminate'
+  # the data for the next subject. Since we assume that each subject
+  # contributes the same time-steps we form the basis over the unique
+  # time-values and then just repeat the basis multiple times (for each subject).
+  unq_time <- unique(time)
+  
   # Response function from Hoeks and Levelt
   # + scale parameter introduced by Wierda et al.
   # n+1 = number of laters
   # t_max = response maximum
   # f = scaling factor
-  h<-f*(time^n)*exp(-n*time/t_max)
+  h<-f*(unq_time^n)*exp(-n*unq_time/t_max)
   
   # Set weight of current basis to 1
   strengths <- rep(0,length(pulse_locations))
@@ -41,7 +48,11 @@ h_basis <- function(i,time,pulse_locations,n,t_max,f) {
   
   # Convolve "spike" defined by peaks with h
   o <- convolve(peaks,rev(h),type="open")
-  o_restr <- o[1:length(time)]
+  o_restr <- o[1:length(unq_time)]
+  
+  # Now repeat the basis function for each subject (i.e., until the dimension
+  # matches the dimension of time).
+  o_restr <- rep(o_restr,length.out=length(time))
   
   return(o_restr)
   
@@ -335,5 +346,6 @@ pupil_solve <- function(pulse_locations,real_locations,
                      setup$Penalties$startIndex,maxiter_outer,
                      maxiter_inner,convergence_tol)
   
-  return(finalCF)
+  return(list("coef"=finalCF,
+              "modelmat"=setup$X))
 }

@@ -1,0 +1,133 @@
+---
+title: "Artificial data analysis"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{artificial_data_analysis}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(papss)
+library(mgcv)
+```
+
+## Simulate Pupil Data
+Here we simulate trial-level pupil data.
+
+```{r}
+n <- 15
+sim_obj <- additive_pupil_sim(n_sub = n,slope_dev = 1.5,sub_dev = 0.15,trial_dev = 0.25)
+dat <- sim_obj$data
+```
+
+## Aggregate
+```{r}
+# ToDo: Use smart-aggregates here instead of averaging.
+aggr_dat <- aggregate(list("pupil"=dat$pupil),by=list("subject"=dat$subject,"time"=dat$time),FUN=mean)
+aggr_dat <- aggr_dat[order(aggr_dat$subject),]
+
+plot(aggr_dat$time[aggr_dat$subject == 1],
+     aggr_dat$pupil[aggr_dat$subject == 1],
+     type="l",ylim=c(min(aggr_dat$pupil),
+                     max(aggr_dat$pupil)),
+     xlab="Time",
+     ylab="Pupil dilation")
+
+for (si in 2:n) {
+ sub_aggr_dat <- aggr_dat[aggr_dat$subject == si,]
+ lines(sub_aggr_dat$time,sub_aggr_dat$pupil,col=si)
+}
+
+```
+
+```{r}
+# Calculate pulse locations
+last_pulse_dat <- length(unique(aggr_dat$time)) - (3 * round(930/100)) - 1
+  
+# Define possible pulse location
+pulse_locations_dat <- seq(1,last_pulse_dat,1)
+real_locations_dat <- unique(aggr_dat$time)[pulse_locations_dat]
+```
+
+## Recover spike weights using papss
+
+```{r}
+# Solve pupil spline
+solvedPupil <- papss::pupil_solve(pulse_locations_dat,
+                           real_locations_dat,
+                           data = aggr_dat,
+                           maxiter_inner = 100000,
+                           maxiter_outer = 30,
+                           model="WIER_SHARED",
+                           convergence_tol = 1e-06)
+
+recovered_coef <- solvedPupil$coef
+model_mat <- solvedPupil$modelmat
+heatmap(model_mat, Colv = NA, Rowv = NA)
+```
+
+## Visualize estimates
+
+```{r}
+# Re-create model matrix
+slopePredX <- papss::create_slope_term(unique(aggr_dat$time),1)
+
+semiPredX <- papss::create_spike_matrix_term(unique(aggr_dat$time),
+                                      pulse_locations_dat,
+                                      n=10.1,
+                                      t_max=930,
+                                      f=1/(10^24))
+
+predMat <- cbind(slopePredX,semiPredX)
+
+slopes <- recovered_coef[1:n]
+    
+# Get estimates for each subject
+for(i in 1:n){
+      sub_i <- i
+      
+      # Get corresponding spline spike weights
+      splineCoefSub <- recovered_coef[((n + 1) + ((i - 1) * ncol(semiPredX))):(n+(i * ncol(semiPredX)))]
+      
+      # Sub coef
+      allCoefSub <- c(slopes[i],splineCoefSub)
+      subCoefMat <- matrix(0,nrow = length(allCoefSub),ncol=1)
+      subCoefMat[,1] <- allCoefSub
+      
+      # Get prediction
+      predSub <- predMat %*% subCoefMat
+      
+      # Plot
+      plot(aggr_dat$time[aggr_dat$subject == sub_i],
+         aggr_dat$pupil[aggr_dat$subject == sub_i],
+         type="l",
+         main=sub_i,
+         xlab = "time",
+         ylab="Pupil dilation (base-lined)",
+         lwd=3)
+      lines(unique(aggr_dat$time),predSub,lty=2,col="red",lwd=3)
+      
+      # Spike plot
+      true_peaks_plot <- sim_obj$sub_truth_demand[,sub_i]
+      
+      
+      est_peaks_plot <- rep(0,length.out = length(unique(aggr_dat$time)))
+      est_peaks_plot[unique(aggr_dat$time) %in%
+                    real_locations_dat[1:length(real_locations_dat)-1]] <- splineCoefSub[1:length(real_locations_dat)-1]
+      plot(unique(aggr_dat$time),true_peaks_plot,type="l",
+           ylim = c(0,1.5),
+           main = sub_i,
+           xlab = "time",
+           ylab="Spike strength",lwd=3)
+      lines(unique(aggr_dat$time),est_peaks_plot,col="red",lwd=3)
+}
+```
+

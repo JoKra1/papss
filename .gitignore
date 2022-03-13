@@ -55,3 +55,4 @@ renv.lock
 .vscode*
 .Rprofile
 .Rbuildignore
+inst/doc

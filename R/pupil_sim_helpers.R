@@ -28,12 +28,13 @@ get_knots <- function(xl, xr, ndx, bdeg) {
 #' trajectory is sparse).
 #' 
 #' @param nk Number of knots for the B-spline basis.
-#' @param n_subs How many subjects to simulate.
+#' @param n_sub How many subjects to simulate.
 #' @param n_trials How many trials to simulate.
 #' @param pulse_loc_diff Assume a pulse every 'pulse_loc_diff' samples (one sample = 20 ms)
 #' @param n_diff Maximum number of spline basis coefficients with systematic per-subject variation
 #' @param spars_deg The degree of sparsity enforced in spline basis coefficient vector
 #' @param sub_dev Standard deviation of normal distribution used to sample by-subject variation
+#' @param slope_dev Standard deviation of normal distribution used to sample by-subject slope variation
 #' @param trial_dev Standard deviation of normal distribution used to sample by-trial variation (in spike weights and coefficients)
 #' @param residual_dev Standard deviation of normal distribution used to sample residuals per trial
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
@@ -43,13 +44,14 @@ get_knots <- function(xl, xr, ndx, bdeg) {
 #' @param seed For replicability
 #' @export
 additive_pupil_sim <- function(nk=20,
-                               n_subs=10,
+                               n_sub=10,
                                n_trials=250,
-                               pulse_loc_dev=1,
+                               pulse_loc_diff=1,
                                n_diff=4,
                                spars_deg=0.5,
-                               sub_dev=0.25,
-                               trial_dev=0.25,
+                               sub_dev=0.15,
+                               slope_dev = 1.5,
+                               trial_dev=0.05,
                                residual_dev=15.0,
                                n=10.1,
                                t_max=930,
