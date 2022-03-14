@@ -20,7 +20,7 @@ Sys.which("make")
 You can also use this command in case you are unsure whether you have already installed RTools in the past.
 
 
-Subsequently (and immediately on macOS), you should be able to install the package right from this repository using functionality offered by the devtools package, as described for example [here](https://cran.r-project.org/web/packages/githubinstall/vignettes/githubinstall.html). Importantly, if you want to build the example vignette, you should set the *build_vignettes* argument to *True*:
+Subsequently (immediately on macOS), you should be able to install the package right from this repository using functionality offered by the devtools package, as described for example [here](https://cran.r-project.org/web/packages/githubinstall/vignettes/githubinstall.html). Importantly, if you want to build the example vignette, you should set the *build_vignettes* argument to *True*:
 
 ```
 devtools::install_github("https://github.com/JoKra1/papss",build_vignettes = T)
