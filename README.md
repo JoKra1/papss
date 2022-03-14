@@ -17,6 +17,9 @@ You need to install RTools to be able to build this package. Instructions can be
 devtools::install_github("https://github.com/JoKra1/papss",build_vignettes = T)
 ```
 
+Note that building the vignette might take some time, since the solver is used on artificial data generated
+for 15 subjects.
+
 ## ToDo:
 - Add examples & vignette
 - Return more data from solveAM
