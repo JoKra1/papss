@@ -18,7 +18,13 @@ devtools::install_github("https://github.com/JoKra1/papss",build_vignettes = T)
 ```
 
 Note that building the vignette might take some time, since the solver is used on artificial data generated
-for 15 subjects.
+for 15 subjects. Once the installation has been completed, you can inspect the vignette using
+one of the following commands:
+
+```
+browseVignettes() // Search for 'papss'
+vignette("artificial_data_analysis", package="papss") // Browse vignette directly
+```
 
 ## ToDo:
 - Add examples & vignette
