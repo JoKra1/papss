@@ -20,18 +20,26 @@ library(mgcv)
 ```
 
 ## Simulate Pupil Data
-Here we simulate trial-level pupil data.
+Here we simulate trial-level pupil data. When the *should_plot* argument is set to *True*, the function will generate five plots. The first plot shows how the simulated demand changes on the population level (i.e., the general trend that best describes changes in demand over time for all subjects belonging to a population of interest). The second plot shows the resulting pupil dilation time-course that is obtained by convolving the aforementioned demand trajectory with the pupil response function (Hoeks & Levelt, 1993). Plot three and four show similar information, but for individual subjects: the simulation assumes that there are differences (controlled via the *sub_dev* argument) between subjects with respect to how demanding a task is for them. The red lines thus reflect the individual subjects' true demand trajectories and corresponding pupil dilation time-courses. Recovering these is the main purpose of this package. The fifth and final plot shows the final artificial raw data. Each line here represents a trial from an individual subject, obtained by adding to the subject's true demand level per-trial variation in the demand trajectories (i.e., trial-level variation in the spike weights, controlled via the *trial_dev* argument) and also (residual) normally distributed noise with constant standard deviation (controlled via the *residual_dev* argument). Finally, each trial can additionally feature a trend in the pupil dilation time-course (variance in slope terms is controlled via the *slope_dev* argument).
 
 ```{r}
 n <- 15
-sim_obj <- additive_pupil_sim(n_sub = n,slope_dev = 1.5,sub_dev = 0.15,trial_dev = 0.25)
+sim_obj <- additive_pupil_sim(n_sub = n,
+                              slope_dev = 1.5,
+                              sub_dev = 0.15,
+                              trial_dev = 0.25,
+                              residual_dev=15.0,
+                              should_plot=T)
 dat <- sim_obj$data
 ```
 
 ## Aggregate
+We now need to aggregate the trial-level data. The code below forms simple averages over time and subject. This is fine if all trials are subject to the same experimental manipulations but is not that informative if the experimental setup contains multiple manipulations (e.g., different (categorical) types of stimuli, or a manipulations of a continuous predictor variable). In that case, it is preferable to estimate an additive model of the pupil (for example using 'mgcv', see Wood (2017)) that takes into account the effects of these predictors on the size of the pupil. These 'smart aggregates' of the pupil can then be used to predict the pupil dilation time-course for specific constellations of the predictors taken into account by the model. The averages below can then be replaced with these estimates.
+
 ```{r}
 # ToDo: Use smart-aggregates here instead of averaging.
 aggr_dat <- aggregate(list("pupil"=dat$pupil),by=list("subject"=dat$subject,"time"=dat$time),FUN=mean)
+
 aggr_dat <- aggr_dat[order(aggr_dat$subject),]
 
 plot(aggr_dat$time[aggr_dat$subject == 1],
@@ -39,14 +47,19 @@ plot(aggr_dat$time[aggr_dat$subject == 1],
      type="l",ylim=c(min(aggr_dat$pupil),
                      max(aggr_dat$pupil)),
      xlab="Time",
-     ylab="Pupil dilation")
+     ylab="Pupil dilation",
+     main= "Average pupil trajectories for all subjects",
+     lwd=3)
 
 for (si in 2:n) {
  sub_aggr_dat <- aggr_dat[aggr_dat$subject == si,]
- lines(sub_aggr_dat$time,sub_aggr_dat$pupil,col=si)
+ lines(sub_aggr_dat$time,sub_aggr_dat$pupil,col=si,lwd=3)
 }
 
 ```
+
+## Defining possible pulse locations
+In most cases it is advisable to just assume a possible demand spike/pulse (Wierda et al., 2012) at every pupil sample (i.e., every 20 ms). The 'papss' will penalize coefficients away that are not needed. However, pulses located at the end of the time range considered (here > 2500) will not be associated with a complete pupil spline basis (i.e., the pupil response will be truncated). Already Wierda et al. (2012) reported the corresponding pulses to be commonly over-estimated and recommended that it is usually a good idea to drop the pulses corresponding to the last 3-5 response functions.
 
 ```{r}
 # Calculate pulse locations
@@ -58,6 +71,7 @@ real_locations_dat <- unique(aggr_dat$time)[pulse_locations_dat]
 ```
 
 ## Recover spike weights using papss
+With the aggregates and a range of pulse locations at hand we can now attempt to recover the subjects' demand trajectories.
 
 ```{r}
 # Solve pupil spline
@@ -71,10 +85,24 @@ solvedPupil <- papss::pupil_solve(pulse_locations_dat,
 
 recovered_coef <- solvedPupil$coef
 model_mat <- solvedPupil$modelmat
+```
+
+## Visualizing model setup
+It is always a good idea to inspect the model matrix more carefully. The first n column contain slope terms the remaining columns are easily visually separated into distinct blocks per subjects, showing the shifting pupil basis functions. These blocks of shifted basis functions are visualized in the second plot.
+
+```{r}
 heatmap(model_mat, Colv = NA, Rowv = NA)
+# Plot bases against row-index (entire time range for all subjects)
+plot(model_mat[,(n+1)],
+     type="l",
+     main="Basis setup over the entire time range")
+for(ci in (n+2):ncol(model_mat)){
+  lines(1:nrow(model_mat),model_mat[,ci],col=ci)
+}
 ```
 
 ## Visualize estimates
+Finally, we can take a look at the recovered demand trajectories and predicted pupil time-courses (plotted in red against the observed true ones). The estimates obtained by 'papss' are generally very smooth and reveal that unnecessary possible spikes have been penalized away.
 
 ```{r}
 # Re-create model matrix
@@ -89,7 +117,9 @@ semiPredX <- papss::create_spike_matrix_term(unique(aggr_dat$time),
 predMat <- cbind(slopePredX,semiPredX)
 
 slopes <- recovered_coef[1:n]
-    
+
+pop_spike_est <- rep(0,length.out=length(unique(aggr_dat$time)))
+
 # Get estimates for each subject
 for(i in 1:n){
       sub_i <- i
@@ -122,6 +152,10 @@ for(i in 1:n){
       est_peaks_plot <- rep(0,length.out = length(unique(aggr_dat$time)))
       est_peaks_plot[unique(aggr_dat$time) %in%
                     real_locations_dat[1:length(real_locations_dat)-1]] <- splineCoefSub[1:length(real_locations_dat)-1]
+      
+      # Calculate sum for average
+      pop_spike_est <- pop_spike_est + est_peaks_plot
+      
       plot(unique(aggr_dat$time),true_peaks_plot,type="l",
            ylim = c(0,1.5),
            main = sub_i,
@@ -129,5 +163,16 @@ for(i in 1:n){
            ylab="Spike strength",lwd=3)
       lines(unique(aggr_dat$time),est_peaks_plot,col="red",lwd=3)
 }
+
+# Calculate average to approximate population estimate
+pop_spike_est <- pop_spike_est/n
+
+# Now plot population estimate
+plot(unique(aggr_dat$time),sim_obj$pop_truth_demand,type="l",
+           ylim = c(0,1.5),
+           main = "Population level",
+           xlab = "time",
+           ylab="Spike strength",lwd=3)
+lines(unique(aggr_dat$time),pop_spike_est,col="red",lwd=3)
 ```
 
