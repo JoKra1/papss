@@ -11,7 +11,16 @@ To estimate the optimal degree of spike penalization we rely on the generalized 
 The definition of the model including model matrix setup is handled in R (R core team, 2021). Solving the penalized NNLS problem and optimizing the additive model is implemented in Eigen (Guennebaud et al., 2010) in C++. RCPP and RCPPEIGEN  (Bates & Eddelbuettel) act as interface between R and C++. 
 
 ## Installation:
-You need to install RTools to be able to build this package. Instructions can be found [here](https://cran.r-project.org/bin/windows/Rtools/rtools40.html). Make sure that you add RTools to the path, as described in the section "Putting RTools" on the Path. Subsequently, you should be able to install the package right from this repository, as described for example [here](https://cran.r-project.org/web/packages/githubinstall/vignettes/githubinstall.html). Importantly, if you want to build the example vignette, you should set the *build_vignettes* argument to *True*:
+You need to install RTools to be able to build this package. Instructions can be found [here](https://cran.r-project.org/bin/windows/Rtools/rtools40.html). Make sure that you add RTools to the path, as described in the section "Putting RTools" on the Path. As recommended in the article, you can use the following command to make sure everything was installed correctly:
+
+```
+Sys.which("make")
+```
+
+You can also use this command in case you are unsure whether you have already installed RTools in the past.
+
+
+Subsequently, you should be able to install the package right from this repository, as described for example [here](https://cran.r-project.org/web/packages/githubinstall/vignettes/githubinstall.html). Importantly, if you want to build the example vignette, you should set the *build_vignettes* argument to *True*:
 
 ```
 devtools::install_github("https://github.com/JoKra1/papss",build_vignettes = T)
