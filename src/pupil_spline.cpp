@@ -227,9 +227,16 @@ void enforceConstraints(Eigen::VectorXd &cf, const Rcpp::StringVector &constrain
 // pseudo-code from the slides in the lecture series by Ang (2020) and has been
 // adapted to solve a penalized NNLS instead of a simple NNLS. The gradient of the
 // penalized least squares loss function is from Wood (2017).
-void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::VectorXd &f,
-                  const Eigen::MatrixXd &embS, const Rcpp::StringVector &constraints, double r,
-                  int maxiter, double tol)
+void agdTOptimize(Eigen::VectorXd &cf,
+                  std::vector<Eigen::VectorXd> &cfHistory,
+                  const Eigen::MatrixXd &R,
+                  const Eigen::VectorXd &f,
+                  const Eigen::MatrixXd &embS,
+                  const Rcpp::StringVector &constraints,
+                  double r,
+                  int maxiter,
+                  double tol,
+                  bool shouldCollectProgress)
 {
     // Notation follows the one by Ang (2020).
     Eigen::MatrixXd Rt = R.transpose();
@@ -295,16 +302,32 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
         }
 
         // Prepare next iter.
+        if (shouldCollectProgress)
+        {
+            cfHistory.push_back(prevCf);
+        }
+
         prevCf = cf;
+
         prevErr = errDot;
     }
 }
 
-//' Fits an additive model based on the stable LS solutions discussed in Wood (2011,2017).
-// [[Rcpp::export]]
-Rcpp::List solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::VectorXd> &initCf,
-                   const Rcpp::StringVector &constraints, const Rcpp::IntegerVector &lambdaTermFreq, const Rcpp::IntegerVector &lambdaTermDim,
-                   int startIndex, int maxIter, int maxIterOptim, double tol = 0.001)
+// Fits an additive model based on the stable LS solutions discussed in Wood (2011,2017).
+int solveAM(Eigen::VectorXd &cf,
+            double &sigma,
+            std::vector<double> &finalLambdas,
+            std::vector<Eigen::VectorXd> &cfHistory,
+            const Eigen::MatrixXd &X,
+            const Eigen::VectorXd &y,
+            const Rcpp::StringVector &constraints,
+            const Rcpp::IntegerVector &lambdaTermFreq,
+            const Rcpp::IntegerVector &lambdaTermDim,
+            int startIndex,
+            int maxIter,
+            int maxIterOptim,
+            double tol,
+            bool shouldCollectProgress)
 {
     // Set convergence code
     int convCode = -1;
@@ -337,9 +360,6 @@ Rcpp::List solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::
     Eigen::VectorXd f = Q.transpose() * y;
     double r = y.dot(y) - f.dot(f);
 
-    // Create a set of coefficients
-    Eigen::VectorXd cf = Eigen::VectorXd(initCf);
-
     // Prepare lambda terms.
     std::vector<std::unique_ptr<LambdaTerm>> lambdaContainer;
 
@@ -357,9 +377,6 @@ Rcpp::List solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::
 
     // Error increase check.
     double prevErr = std::numeric_limits<double>::max();
-    
-    // Sigma holder
-    double sigma = 0.0;
 
     // Now iteratively optimize cf and then the smoothness penalties.
     for (int i = 0; i < maxIter; ++i)
@@ -376,7 +393,16 @@ Rcpp::List solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::
         }
 
         // Optimize for cf given current lambda values.
-        agdTOptimize(cf, R, f, embS, constraints, r, maxIterOptim, tol);
+        agdTOptimize(cf,
+                     cfHistory,
+                     R,
+                     f,
+                     embS,
+                     constraints,
+                     r,
+                     maxIterOptim,
+                     tol,
+                     shouldCollectProgress);
 
         // Now calculate the next step in the stable LS approach:
         // QR decomposition based on R + Cholesky factor of embS.
@@ -407,16 +433,16 @@ Rcpp::List solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::
         // Now form the next QR decomposition (See above).
         Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr2(RL1);
         Eigen::MatrixXd R2 = qr2.matrixR().template triangularView<Eigen::Upper>();
-        
+
         // Extract relevant part again.
         R2 = R2.block(0, 0, colsX, colsX).eval();
-        
+
         // In case the diagonal contains zero elements terminate nicely.
         if (!(R2.diagonal().array().abs().matrix().minCoeff() > 0.0))
         {
             convCode = -2;
             Rcpp::Rcerr << "Problem with calculating inverse for R2. Is the problem identifiable?\n";
-            break;
+            return convCode;
         }
 
         // Extract permutation matrix but do not reverse pivot on R2!
@@ -456,7 +482,7 @@ Rcpp::List solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::
         if (absErrDiff < tol)
         {
             convCode = 0;
-            break;
+            return convCode;
         }
 
         // Now we can update all lamda terms.
@@ -470,18 +496,77 @@ Rcpp::List solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::
     }
 
     // Collect final penalties
-    // Rcpp::NumericVector finalLambdas;
-    std::vector<double> finalLambdas;
-
     for (const std::unique_ptr<LambdaTerm> &LDT : lambdaContainer)
+    {
+        double l = (LDT)->getLambda();
+        finalLambdas.push_back(l);
+    }
+
+    return convCode;
+}
+
+// Additive model wrapper accessed from R.
+// [[Rcpp::export]]
+Rcpp::List wrapAmSolve(const Eigen::Map<Eigen::MatrixXd> X,
+                       const Eigen::Map<Eigen::VectorXd> y,
+                       const Eigen::Map<Eigen::VectorXd> &initCf,
+                       const Rcpp::StringVector &constraints,
+                       const Rcpp::IntegerVector &lambdaTermFreq,
+                       const Rcpp::IntegerVector &lambdaTermDim,
+                       int startIndex,
+                       int maxIter,
+                       int maxIterOptim,
+                       double tol = 0.001,
+                       bool shouldCollectProgress = false)
+{
+    // Create a set of coefficients, will be passed down and updated by solveAM
+    Eigen::VectorXd cf = Eigen::VectorXd(initCf);
+
+    // Create storage variables for objects we want to monitor/return to R.
+    double sigma = 0.0;
+    std::vector<double> finalLambdas;
+    std::vector<Eigen::VectorXd> cfHistory;
+
+    // Solve the additive model
+    int convCode = solveAM(cf,
+                           sigma,
+                           finalLambdas,
+                           cfHistory,
+                           X,
+                           y,
+                           constraints,
+                           lambdaTermFreq,
+                           lambdaTermDim,
+                           startIndex,
+                           maxIter,
+                           maxIterOptim,
+                           tol,
+                           shouldCollectProgress);
+
+    // Convert cfHistory into something that can more easily be passed to R
+    Eigen::MatrixXd cfHistMat = Eigen::MatrixXd::Zero(1, 1);
+
+    if (shouldCollectProgress)
+    {
+        // Get actual number of iters
+        int totalIters = cfHistory.size();
+
+        // Number of coefs
+        int n_coef  = cf.rows();
+
+        // Prepare matrix to be filled with updates to coefficients over iters (cols).
+        cfHistMat = Eigen::MatrixXd::Zero(n_coef, totalIters);
+        
+        for (int i = 0; i < totalIters; ++i)
         {
-            double l = (LDT)->getLambda();
-            finalLambdas.push_back(l);
+            cfHistMat.block(0, i, n_coef, 1) = cfHistory[i];
         }
+        
+    }
 
     return Rcpp::List::create(Rcpp::Named("coefficients") = cf,
-                              Rcpp::Named("lastError") = prevErr,
                               Rcpp::Named("convergence") = convCode,
                               Rcpp::Named("finalLambdas") = finalLambdas,
-                              Rcpp::Named("sigma")=sigma);
+                              Rcpp::Named("sigma") = sigma,
+                              Rcpp::Named("coefChanges") = cfHistMat);
 }

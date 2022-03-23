@@ -310,7 +310,8 @@ pupil_solve <- function(pulse_locations,real_locations,
                         data,model="WIER_SHARED",n=10.1,
                         t_max=930,f=1/(10^24),
                         maxiter_inner=10000,maxiter_outer=25,
-                        convergence_tol=1e-06) {
+                        convergence_tol=1e-06,
+                        should_collect_progress=F) {
   
   
   
@@ -341,15 +342,15 @@ pupil_solve <- function(pulse_locations,real_locations,
   y <- matrix(nrow = length(data$pupil),ncol=1)
   y[,1] <- data$pupil
 
-  solved_pup <- solveAM(setup$X,y,initCf,setup$constraints,
-                     setup$Penalties$freq,setup$Penalties$size,
-                     setup$Penalties$startIndex,maxiter_outer,
-                     maxiter_inner,convergence_tol)
+  solved_pup <- wrapAmSolve(setup$X,y,initCf,setup$constraints,
+                            setup$Penalties$freq,setup$Penalties$size,
+                            setup$Penalties$startIndex,maxiter_outer,
+                            maxiter_inner,convergence_tol,should_collect_progress)
   
   return(list("coef" = solved_pup$coefficients,
-              "lastError" = solved_pup$lastError,
               "modelmat" = setup$X,
               "lambdas" = solved_pup$finalLambdas,
               "sigma" = solved_pup$sigma,
-              "convergence" = solved_pup$convergence))
+              "convergence" = solved_pup$convergence,
+              "coefHistory" = solved_pup$coefChanges))
 }

@@ -11,9 +11,9 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
-// solveAM
-Rcpp::List solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::VectorXd>& initCf, const Rcpp::StringVector& constraints, const Rcpp::IntegerVector& lambdaTermFreq, const Rcpp::IntegerVector& lambdaTermDim, int startIndex, int maxIter, int maxIterOptim, double tol);
-RcppExport SEXP _papss_solveAM(SEXP XSEXP, SEXP ySEXP, SEXP initCfSEXP, SEXP constraintsSEXP, SEXP lambdaTermFreqSEXP, SEXP lambdaTermDimSEXP, SEXP startIndexSEXP, SEXP maxIterSEXP, SEXP maxIterOptimSEXP, SEXP tolSEXP) {
+// wrapAmSolve
+Rcpp::List wrapAmSolve(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::VectorXd>& initCf, const Rcpp::StringVector& constraints, const Rcpp::IntegerVector& lambdaTermFreq, const Rcpp::IntegerVector& lambdaTermDim, int startIndex, int maxIter, int maxIterOptim, double tol, bool shouldCollectProgress);
+RcppExport SEXP _papss_wrapAmSolve(SEXP XSEXP, SEXP ySEXP, SEXP initCfSEXP, SEXP constraintsSEXP, SEXP lambdaTermFreqSEXP, SEXP lambdaTermDimSEXP, SEXP startIndexSEXP, SEXP maxIterSEXP, SEXP maxIterOptimSEXP, SEXP tolSEXP, SEXP shouldCollectProgressSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -27,13 +27,14 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type maxIter(maxIterSEXP);
     Rcpp::traits::input_parameter< int >::type maxIterOptim(maxIterOptimSEXP);
     Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
-    rcpp_result_gen = Rcpp::wrap(solveAM(X, y, initCf, constraints, lambdaTermFreq, lambdaTermDim, startIndex, maxIter, maxIterOptim, tol));
+    Rcpp::traits::input_parameter< bool >::type shouldCollectProgress(shouldCollectProgressSEXP);
+    rcpp_result_gen = Rcpp::wrap(wrapAmSolve(X, y, initCf, constraints, lambdaTermFreq, lambdaTermDim, startIndex, maxIter, maxIterOptim, tol, shouldCollectProgress));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_papss_solveAM", (DL_FUNC) &_papss_solveAM, 10},
+    {"_papss_wrapAmSolve", (DL_FUNC) &_papss_wrapAmSolve, 11},
     {NULL, NULL, 0}
 };
 
