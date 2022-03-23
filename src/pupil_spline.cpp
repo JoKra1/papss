@@ -442,7 +442,7 @@ int solveAM(Eigen::VectorXd &cf,
         {
             convCode = -2;
             Rcpp::Rcerr << "Problem with calculating inverse for R2. Is the problem identifiable?\n";
-            return convCode;
+            break;
         }
 
         // Extract permutation matrix but do not reverse pivot on R2!
@@ -482,7 +482,7 @@ int solveAM(Eigen::VectorXd &cf,
         if (absErrDiff < tol)
         {
             convCode = 0;
-            return convCode;
+            break;
         }
 
         // Now we can update all lamda terms.

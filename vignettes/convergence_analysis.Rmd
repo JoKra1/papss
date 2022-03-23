@@ -1,0 +1,141 @@
+---
+title: "convergence_analysis"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{convergence_analysis}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(papss)
+```
+
+## Simulate pupil data
+
+Here we again start by simulating some pupil data. We only look at 10 subjects here
+since we want to collect the history of coefficient updates this time, which quickly
+results in very large matrices.
+
+```{r}
+n <- 10
+sim_obj <- additive_pupil_sim(n_sub = n,
+                              slope_dev = 1.5,
+                              sub_dev = 0.15,
+                              trial_dev = 0.25,
+                              residual_dev=15.0,
+                              should_plot=T)
+dat <- sim_obj$data
+```
+
+## Aggregate
+We again aggregate the raw data, as is explained further in the artificial_data_analysis vignette.
+
+```{r}
+aggr_dat <- aggregate(list("pupil"=dat$pupil),by=list("subject"=dat$subject,"time"=dat$time),FUN=mean)
+
+aggr_dat <- aggr_dat[order(aggr_dat$subject),]
+
+plot(aggr_dat$time[aggr_dat$subject == 1],
+     aggr_dat$pupil[aggr_dat$subject == 1],
+     type="l",ylim=c(min(aggr_dat$pupil),
+                     max(aggr_dat$pupil)),
+     xlab="Time",
+     ylab="Pupil dilation",
+     main= "Average pupil trajectories for all subjects",
+     lwd=3)
+
+for (si in 2:n) {
+ sub_aggr_dat <- aggr_dat[aggr_dat$subject == si,]
+ lines(sub_aggr_dat$time,sub_aggr_dat$pupil,col=si,lwd=3)
+}
+
+```
+
+We also need to define pulse locations again.
+
+```{r}
+# Calculate pulse locations
+last_pulse_dat <- length(unique(aggr_dat$time)) - (3 * round(930/100)) - 1
+  
+# Define possible pulse location
+pulse_locations_dat <- seq(1,last_pulse_dat,1)
+real_locations_dat <- unique(aggr_dat$time)[pulse_locations_dat]
+```
+
+## Investigating the identifiability of the problems
+How will the solver deal with different starting values?
+
+```{r}
+iter <- 10
+hist_collection <- list()
+
+for(i in 1:iter){
+  # Pick a new seed
+  set.seed(i)
+  
+  # Solve the pupil spline
+  solvedPupil <- papss::pupil_solve(pulse_locations_dat,
+                             real_locations_dat,
+                             data = aggr_dat,
+                             maxiter_inner = 10000,
+                             maxiter_outer = 10,
+                             model="WIER_SHARED",
+                             convergence_tol = 1e-06,
+                             should_collect_progress=T)
+  
+  # Coefficient history
+  hist = solvedPupil$coefHistory
+  hist_collection[[i]] <- hist
+}
+```
+
+## Coefficient changes over time
+
+This looks very different - apart from the clearly identifiable slopes.
+
+```{r}
+for(hi in 1:iter){
+  chist <- hist_collection[[hi]]
+  plot(1:ncol(chist),
+       chist[1,],
+       type="l",
+       lwd=3,
+       ylim=c(-3,3),
+       xlab="Iterations",
+       ylab="Coefficient value")
+  
+  for(ri in 2:nrow(chist)){
+    lines(1:ncol(chist), chist[ri,],lwd=3,col=ri)
+  }
+}
+```
+
+
+But what if we look only at the last column, i.e., the final estimates? Close agreement! 
+```{r}
+chist <- hist_collection[[1]]
+plot(1:nrow(chist),
+       chist[,ncol(chist)],
+       ylim=c(-3,3),
+       xlab="Coefficient",
+       ylab="Coefficient value",type="l",lwd=3)
+
+for(hi in 2:iter){
+  chist <- hist_collection[[hi]]
+  plot(1:nrow(chist), chist[,ncol(chist)],
+       col=ri,
+       ylim=c(-3,3),
+       xlab="Coefficient",
+       ylab="Coefficient value",type="l",lwd=3)
+
+
+}
+```
