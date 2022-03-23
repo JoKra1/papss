@@ -341,11 +341,15 @@ pupil_solve <- function(pulse_locations,real_locations,
   y <- matrix(nrow = length(data$pupil),ncol=1)
   y[,1] <- data$pupil
 
-  finalCF <- solveAM(setup$X,y,initCf,setup$constraints,
+  solved_pup <- solveAM(setup$X,y,initCf,setup$constraints,
                      setup$Penalties$freq,setup$Penalties$size,
                      setup$Penalties$startIndex,maxiter_outer,
                      maxiter_inner,convergence_tol)
   
-  return(list("coef"=finalCF,
-              "modelmat"=setup$X))
+  return(list("coef" = solved_pup$coefficients,
+              "lastError" = solved_pup$lastError,
+              "modelmat" = setup$X,
+              "lambdas" = solved_pup$finalLambdas,
+              "sigma" = solved_pup$sigma,
+              "convergence" = solved_pup$convergence))
 }

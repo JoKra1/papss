@@ -93,6 +93,7 @@ private:
 public:
     LambdaTerm(int n, int dim);
     const std::vector<std::unique_ptr<Penalty>> &getPenalties() const; // Will never change corresponding LambdaTerm instance.
+    double getLambda();
     void embeddInS(Eigen::MatrixXd &embS, int &cIndex, bool shouldParameterize);
     void stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::MatrixXd &cf, const Eigen::MatrixXd &inv,
                            const Eigen::MatrixXd &gInv, int &cIndex, double sigma);
@@ -130,6 +131,12 @@ LambdaTerm::LambdaTerm(int n, int dim)
 const std::vector<std::unique_ptr<Penalty>> &LambdaTerm::getPenalties() const
 {
     return penalties;
+}
+
+// Getter for lambda value corresponding to this term.
+double LambdaTerm::getLambda()
+{
+    return lambda;
 }
 
 // Embed all penalties belonging to this term in a zero-padded matrix embS as discussed by Wood (2017, s. 4.3.1).
@@ -182,7 +189,6 @@ void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::Mat
 
     // Now calculate the lambda update for this term.
     lambda = sigma * num / denom(0, 0) * lambda;
-    Rcpp::Rcout << lambda << "\n";
 }
 
 // ##################################### Functions #####################################
@@ -260,7 +266,7 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
 
         // Calculate momentum update based on alpha coefficient discussed
         // in Sutskever et al. (2013)
-        double aii = 0.5 * (1 + sqrt(4 * pow(ai,2) + 1));
+        double aii = 0.5 * (1 + sqrt(4 * pow(ai, 2) + 1));
 
         // Accelerate coefficient update.
         ycf = cf + ((ai - 1) / aii) * (cf - prevCf);
@@ -296,10 +302,13 @@ void agdTOptimize(Eigen::VectorXd &cf, const Eigen::MatrixXd &R, const Eigen::Ve
 
 //' Fits an additive model based on the stable LS solutions discussed in Wood (2011,2017).
 // [[Rcpp::export]]
-Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::VectorXd> &initCf,
-                        const Rcpp::StringVector &constraints, const Rcpp::IntegerVector &lambdaTermFreq, const Rcpp::IntegerVector &lambdaTermDim,
-                        int startIndex, int maxIter, int maxIterOptim, double tol = 0.001)
+Rcpp::List solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::VectorXd> &initCf,
+                   const Rcpp::StringVector &constraints, const Rcpp::IntegerVector &lambdaTermFreq, const Rcpp::IntegerVector &lambdaTermDim,
+                   int startIndex, int maxIter, int maxIterOptim, double tol = 0.001)
 {
+    // Set convergence code
+    int convCode = -1;
+
     // Get dimension of X for re-use later.
     int rowsX = X.rows();
     int colsX = X.cols();
@@ -348,11 +357,13 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
 
     // Error increase check.
     double prevErr = std::numeric_limits<double>::max();
+    
+    // Sigma holder
+    double sigma = 0.0;
 
     // Now iteratively optimize cf and then the smoothness penalties.
     for (int i = 0; i < maxIter; ++i)
     {
-        Rcpp::Rcout << "Iter: " << i << "\n";
 
         // Create embedded S term.
         int cInd = startIndex;
@@ -396,8 +407,18 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
         // Now form the next QR decomposition (See above).
         Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr2(RL1);
         Eigen::MatrixXd R2 = qr2.matrixR().template triangularView<Eigen::Upper>();
+        
+        // Extract relevant part again.
         R2 = R2.block(0, 0, colsX, colsX).eval();
         
+        // In case the diagonal contains zero elements terminate nicely.
+        if (!(R2.diagonal().array().abs().matrix().minCoeff() > 0.0))
+        {
+            convCode = -2;
+            Rcpp::Rcerr << "Problem with calculating inverse for R2. Is the problem identifiable?\n";
+            break;
+        }
+
         // Extract permutation matrix but do not reverse pivot on R2!
         Eigen::MatrixXd P2 = qr2.colsPermutation();
 
@@ -425,17 +446,18 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
         // Finally we need to calculate the current estimate of sigma^2.
         Eigen::VectorXd res = f2 - R2 * P2.transpose() * cf;
         double errDot = res.dot(res) + r2;
-        double sigma = errDot / (rowsX - (Inv * R.transpose() * R).trace());
+        sigma = errDot / (rowsX - (Inv * R.transpose() * R).trace());
         // Rcpp::Rcout << sigma << "\n";
 
         // Crude convergence control
         double absErrDiff = errDot > prevErr ? errDot - prevErr : prevErr - errDot;
+        prevErr = errDot;
+
         if (absErrDiff < tol)
         {
+            convCode = 0;
             break;
         }
-
-        prevErr = errDot;
 
         // Now we can update all lamda terms.
         cInd = startIndex;
@@ -446,5 +468,20 @@ Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Ei
             (LDT)->stepFellnerSchall(embS, cf, Inv, gInv, cInd, sigma);
         }
     }
-    return cf;
+
+    // Collect final penalties
+    // Rcpp::NumericVector finalLambdas;
+    std::vector<double> finalLambdas;
+
+    for (const std::unique_ptr<LambdaTerm> &LDT : lambdaContainer)
+        {
+            double l = (LDT)->getLambda();
+            finalLambdas.push_back(l);
+        }
+
+    return Rcpp::List::create(Rcpp::Named("coefficients") = cf,
+                              Rcpp::Named("lastError") = prevErr,
+                              Rcpp::Named("convergence") = convCode,
+                              Rcpp::Named("finalLambdas") = finalLambdas,
+                              Rcpp::Named("sigma")=sigma);
 }

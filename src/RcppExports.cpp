@@ -12,7 +12,7 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // solveAM
-Eigen::MatrixXd solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::VectorXd>& initCf, const Rcpp::StringVector& constraints, const Rcpp::IntegerVector& lambdaTermFreq, const Rcpp::IntegerVector& lambdaTermDim, int startIndex, int maxIter, int maxIterOptim, double tol);
+Rcpp::List solveAM(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::VectorXd>& initCf, const Rcpp::StringVector& constraints, const Rcpp::IntegerVector& lambdaTermFreq, const Rcpp::IntegerVector& lambdaTermDim, int startIndex, int maxIter, int maxIterOptim, double tol);
 RcppExport SEXP _papss_solveAM(SEXP XSEXP, SEXP ySEXP, SEXP initCfSEXP, SEXP constraintsSEXP, SEXP lambdaTermFreqSEXP, SEXP lambdaTermDimSEXP, SEXP startIndexSEXP, SEXP maxIterSEXP, SEXP maxIterOptimSEXP, SEXP tolSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
