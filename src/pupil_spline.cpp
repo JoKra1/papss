@@ -285,14 +285,17 @@ void agdTOptimize(Eigen::VectorXd &cf,
         Eigen::VectorXd err = f - R * cf;
         double errDot = err.dot(err);
 
+        /*
         // Restart handling.
         if (errDot > prevErr)
         {
+            Rcpp::Rcout << "Restart.\n";
             cf = prevCf - (lr * ((Q * prevCf) - p));
             enforceConstraints(cf, constraints);
             ycf = cf;
             ai = a0;
         }
+        */
 
         // Crude convergence check.
         double absErrDiff = errDot > prevErr ? errDot - prevErr : prevErr - errDot;
