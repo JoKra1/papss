@@ -91,7 +91,7 @@ private:
     double lambda;
 
 public:
-    LambdaTerm(int n, int dim);
+    LambdaTerm(int n, int dim, double startLambda);
     const std::vector<std::unique_ptr<Penalty>> &getPenalties() const; // Will never change corresponding LambdaTerm instance.
     double getLambda();
     void embeddInS(Eigen::MatrixXd &embS, int &cIndex, bool shouldParameterize);
@@ -100,10 +100,10 @@ public:
 };
 
 // Associate n penalties of dimension (dim) with this LambdaTerm.
-LambdaTerm::LambdaTerm(int n, int dim)
+LambdaTerm::LambdaTerm(int n, int dim, double startLambda)
 {
     nPenalties = n;
-    lambda = 1.1;
+    lambda = startLambda;
 
     // Create associated penalty objects
     for (int i = 0; i < n; ++i)
@@ -323,6 +323,7 @@ int solveAM(Eigen::VectorXd &cf,
             const Rcpp::StringVector &constraints,
             const Rcpp::IntegerVector &lambdaTermFreq,
             const Rcpp::IntegerVector &lambdaTermDim,
+            double startLambda,
             int startIndex,
             int maxIter,
             int maxIterOptim,
@@ -365,7 +366,7 @@ int solveAM(Eigen::VectorXd &cf,
 
     for (int lIdx = 0; lIdx < lambdaTermFreq.size(); ++lIdx)
     {
-        std::unique_ptr<LambdaTerm> LDT = std::make_unique<LambdaTerm>(lambdaTermFreq(lIdx), lambdaTermDim(lIdx));
+        std::unique_ptr<LambdaTerm> LDT = std::make_unique<LambdaTerm>(lambdaTermFreq(lIdx), lambdaTermDim(lIdx), startLambda);
         lambdaContainer.push_back(std::move(LDT));
     }
 
@@ -517,7 +518,8 @@ Rcpp::List wrapAmSolve(const Eigen::Map<Eigen::MatrixXd> X,
                        int maxIter,
                        int maxIterOptim,
                        double tol = 0.001,
-                       bool shouldCollectProgress = false)
+                       bool shouldCollectProgress = false,
+                       double startLambda = 0.1)
 {
     // Create a set of coefficients, will be passed down and updated by solveAM
     Eigen::VectorXd cf = Eigen::VectorXd(initCf);
@@ -537,6 +539,7 @@ Rcpp::List wrapAmSolve(const Eigen::Map<Eigen::MatrixXd> X,
                            constraints,
                            lambdaTermFreq,
                            lambdaTermDim,
+                           startLambda,
                            startIndex,
                            maxIter,
                            maxIterOptim,

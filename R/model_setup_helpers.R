@@ -309,9 +309,12 @@ WIER_DEN_SHARED_NNLS_model_setup <- function(time,subs,pulse_locations,n,t_max,f
 pupil_solve <- function(pulse_locations,real_locations,
                         data,model="WIER_SHARED",n=10.1,
                         t_max=930,f=1/(10^24),
-                        maxiter_inner=10000,maxiter_outer=25,
+                        maxiter_inner=10000,
+                        maxiter_outer=25,
                         convergence_tol=1e-06,
-                        should_collect_progress=F) {
+                        should_collect_progress=F,
+                        start_lambda=0.1,
+                        init_cf = NULL) {
   
   
   
@@ -334,18 +337,22 @@ pupil_solve <- function(pulse_locations,real_locations,
     stop("Model not specified.")
   }
   
-  # Initialize coefficients
-  initCf <- matrix(nrow=ncol(setup$X),ncol=1)
-  initCf[,1] <- runif(n=ncol(setup$X))
+  # Initialize coefficients if none are provided
+  if(is.null(init_cf)){
+    init_cf <- matrix(nrow=ncol(setup$X),ncol=1)
+    init_cf[,1] <- runif(n=ncol(setup$X))
+  }
+  
   
   # Create y vector
   y <- matrix(nrow = length(data$pupil),ncol=1)
   y[,1] <- data$pupil
 
-  solved_pup <- wrapAmSolve(setup$X,y,initCf,setup$constraints,
+  solved_pup <- wrapAmSolve(setup$X,y,init_cf,setup$constraints,
                             setup$Penalties$freq,setup$Penalties$size,
                             setup$Penalties$startIndex,maxiter_outer,
-                            maxiter_inner,convergence_tol,should_collect_progress)
+                            maxiter_inner,convergence_tol,
+                            should_collect_progress,start_lambda)
   
   return(list("coef" = solved_pup$coefficients,
               "modelmat" = setup$X,
