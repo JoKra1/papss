@@ -23,6 +23,7 @@
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Parameter defined by Wierda et al. (scaling factor)
+#' @export
 h_basis <- function(i,time,pulse_locations,n,t_max,f) {
   
   # We need to make sure that bases towards the end do not 'contaminate'

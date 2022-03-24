@@ -1,6 +1,9 @@
 ---
 title: "Artificial data analysis"
-output: rmarkdown::html_vignette
+header-includes:
+    - \usepackage{bm}
+output:
+  rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{artificial_data_analysis}
   %\VignetteEngine{knitr::rmarkdown}
@@ -10,20 +13,140 @@ vignette: >
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>"
+  comment = "#>",
+  fig.align = "center",
+  fig.width = 6,
+  fig.height = 4
 )
 ```
 
 ```{r setup}
 library(papss)
 library(mgcv)
+set.seed(2022) # For replicability.
 ```
 
-## Simulate Pupil Data
-Here we simulate trial-level pupil data. When the *should_plot* argument is set to *True*, the function will generate five plots. The first plot shows how the simulated demand changes on the population level (i.e., the general trend that best describes changes in demand over time for all subjects belonging to a population of interest). The second plot shows the resulting pupil dilation time-course that is obtained by convolving the aforementioned demand trajectory with the pupil response function (Hoeks & Levelt, 1993). Plot three and four show similar information, but for individual subjects: the simulation assumes that there are differences (controlled via the *sub_dev* argument) between subjects with respect to how demanding a task is for them. The red lines thus reflect the individual subjects' true demand trajectories and corresponding pupil dilation time-courses. Recovering these is the main purpose of this package. The fifth and final plot shows the final artificial raw data. Each line here represents a trial from an individual subject, obtained by adding to the subject's true demand level per-trial variation in the demand trajectories (i.e., trial-level variation in the spike weights, controlled via the *trial_dev* argument) and also (residual) normally distributed noise with constant standard deviation (controlled via the *residual_dev* argument). Finally, each trial can additionally feature a trend in the pupil dilation time-course (variance in slope terms is controlled via the *slope_dev* argument).
+## Introduction
+
+Hoeks & Levelt (1993) investigated the characteristics of the function relating an increase in 'cognitive demand' to a change in the dilation of the pupil. They briefly summarize the extensive body of research relating changes in pupil dilation to the effort associated with cognitive processing - but Kahneman's book 'Attention and Effort' already published in 1973 might provide a better overview for the interested reader. Hoeks & Levelt were motivated by the fact that the pupil dilation time-course is best described as a slowly evolving signal, which obscures how changes in demand exactly contributed to its shape. They revealed that the increase in dilation following a spike in demand is best modeled using a Gamma-Erlang function. They also determined the optimal values for the parameters associated with the latter experimentally. You can check the documentation of the *h_basis* function if you want to know more (or read their paper!):
+
+```{r, eval=F, echo=T}
+help(h_basis)
+```
+
+In their original work they really focused on isolated 'demand spikes' linked to clearly identifiable events in their experiment setup. Below we visualize their 'pupil-response function':
 
 ```{r}
-n <- 15
+# First we create a time variable.
+time <- seq(0,2500,by=20) # Time at 50 HZ
+
+# Index vector for possible pulse locations, pointing to each sample
+pulse_locations <- seq(1,length(time),by=1)
+
+# Now we can calculate the effect on the pupil of an isolated spike
+# that happened during the 5th. sample.
+# Note that the 'f' parameter was added later by Wierda et al. (2012) to
+# scale the response of the pupil to a spike of fixed strength.
+pupil_dilation <- h_basis(5,time,pulse_locations,n=10.1,t_max=930,f=1/(10^24))
+
+# Which we can now visualize...
+plot(time,pupil_dilation,typ="l",lwd=3,xlab="time",ylab="Pupil dilation")
+
+# Together with the spike...
+abline(v=time[5],lty=2,lwd=3,col="red")
+
+legend("topright",
+       c("Pupil response","Spike in demand"),
+       lty = c(1,2),lwd=3,col=c("black","red"))
+```
+
+This figure exemplifies what Hoeks & Levelt meant when they said that the pupil dilation changes slowly with time. It also highlights the contribution of the 't_max' parameter, since the pupil response peaks around 930 ms after the spike occurred.
+
+According to their analysis, the pupil dilation time-course we can monitor then is nothing but the accumulation of multiple **weighted** spikes (assuming that external conditions such as illumination and gaze direction remain stationary) - each having an additive effect on the dilation of the pupil:
+
+```{r}
+# Now lets add some more spikes - and vary their weight!
+
+# This variable will hold the sum of the individual responses - i.e., what we could observe!
+pupil <- rep(0,length.out=length(time))
+
+# We now refer to the resulting variables as h_{i}, the purpose will become
+# clear in the new paragraph.
+H <- matrix(nrow=length(time),ncol = 4)
+h1 <- h_basis(5,time,pulse_locations,n=10.1,t_max=930,f=1/(10^24))
+H[,1] <- h1
+# Don't forget to add the weighted contribution of this spike to the overall time-course
+pupil <- pupil + 0.3 * h1
+
+# Visualization of the individual contribution
+plot(time,0.3 * h1,typ="l",
+     lwd=3,xlab="time",
+     ylab="Pupil dilation",
+     ylim=c(0,70),lty=2)
+
+# Together with the spike...
+abline(v=time[5],lty=2,lwd=3,col="black")
+
+# Sample some weights
+betas <- runif(3)
+
+# Now add more spikes!
+iw <- 1
+for (si in c(10,15,20)) {
+  hi <- h_basis((si*3),time,pulse_locations,n=10.1,t_max=930,f=1/(10^24))
+  pupil <- pupil + betas[iw] * hi
+  H[,(iw+1)] <- hi
+  
+  lines(time,betas[iw] * hi,lwd=3,lty=2,col=si)
+  abline(v=time[(si*3)],lty=2,lwd=3,col=si)
+  iw <- iw +1
+}
+
+# And the resulting pupil dilation time-course we could actually observe!
+lines(time,pupil,lwd=3)
+```
+
+The weight of these spikes is of course only selected at random here for illustrative purposes. In practice, what researchers are interested in is to find the spike weights that most likely generated an observed pupil dilation time-course. Hoeks & Levelt recommended that this can be solved by means of least squares - which in the end boils down to solving an **additive model of the pupil size**:
+
+\begin{align}
+pupil_i = \hat{\beta_{1}} * h_{1}(time_{i}) + \hat{\beta_{2}} * h_{2}(time_{i}) + \hat{\beta_{3}} * h_{3}(time_{i}) + \hat{\beta_{4}} * h_{4}(time_{i}) + \epsilon
+\end{align}
+
+or more conveniently:
+
+\begin{align}
+pupil_{i} = \sum_{k=1}^{4} \hat{\beta_{k}} * h_{k}(time_{i}) + \epsilon
+\end{align}
+
+```{r}
+#ToDo: Discuss the assumption of epsilon being N(0,sigma^2)...
+```
+
+If then $\hat{\mathbf{b}}$ is the vector containing the individual $\beta_i$ and $\mathbf{H}$ is a matrix where each column corresponds to a $h_i$, with each row corresponding to an individual $h_i({time_{i}})$, as visualized below,
+
+```{r}
+heatmap(H,Colv = NA,Rowv=NA,scale = "none")
+```
+
+
+then they argue that:
+
+\begin{align}
+\hat{\mathbf{b}} = \underset{\mathbf{b}}{\operatorname{argmin}} || \mathbf{pupil}  - \mathbf{H} * \mathbf{b}||_{2}^{2}
+\end{align}
+
+which they solve using the standard normal equations, followed by setting all implausible spikes (i.e., negative ones) to 0. This approach to obtaining a non-negative least squares (NNLS) spike weight estimate, form now on denoted as $\hat{\mathbf{b}}^*$ is sub-optimal (see Ang, 2020) and the authors claimed themselves that their work was limited to clearly separable and individual 'spikes in demand'. In 2012 Wierda and colleagues improved on this, by revealing that they can track more continuous-like changes in demand with 'spikes' assumed to happen every 100 ms. They relied on gradient-free constrained optimization to estimate non-negative spike weights and also introduced not just a scaling parameter to the original response function by Hoeks & Levelt, but also a slope parameter accounting for possible drifts in the pupil dilation time-course. Their algorithm iteratively improves and constraints $\hat{\mathbf{b}}^*$ to adhere to the physical limitations characterizing this estimation problem (i.e., only non-negative weights are permitted). Their work has inspired multiple replications and extensions (notably: Denison et al., 2020; see Fink et al. (2021) for a review).
+
+Wierda et al. (2012) suggest that the temporal resolution of their approach is truly just limited by the selected sampling rate - promising that continuous changes in demand can be revealed. However, we noticed that the gradient free optimizer struggled with identifying solutions in case spikes were assumed to happen at every sample (even in their own experiments, they averaged over 100 runs of each 100.000 optimization steps to account for these fluctuations). This repository thus provides an implementation of an accelerated projected gradient descent optimizer (Ang, 2020; Sutskever et al., 2013), which makes progress on the optimization problem much faster and more reliably (see the other vignettes on convergence properties).
+
+However, we observed that changing the optimizer was not sufficient to achieve the desired 20 ms spike spread: The NNLS estimate of $\hat{\mathbf{b}}^*$ turns out to be too sparse! We show this below for some artificial data.
+
+## Simulate Pupil Data
+
+Here we simulate trial-level pupil data. When the *should_plot* argument is set to *True*, the function will generate five plots. The first plot shows how the simulated demand changes on the population level (i.e., the general trend that best describes changes in demand over time for all subjects belonging to a population of interest). The second plot shows the resulting pupil dilation time-course that is obtained by convolving the aforementioned demand trajectory with the pupil response function (Hoeks & Levelt, 1993). Plot three and four show similar information, but for individual subjects: the simulation assumes that there are differences (controlled via the *sub_dev* argument) between subjects with respect to how demanding a task is for them. The red lines thus reflect the individual subjects' true demand trajectories and corresponding pupil dilation time-courses. The fifth and final plot shows the final artificial raw data. Each line here represents a trial from an individual subject, obtained by adding to the subject's true demand level per-trial variation in the demand trajectories (i.e., trial-level variation in the spike weights, controlled via the *trial_dev* argument) and also (residual) normally distributed noise with constant standard deviation (controlled via the *residual_dev* argument). Finally, each trial can additionally feature a trend in the pupil dilation time-course (variance in slope terms is controlled via the *slope_dev* argument).
+
+```{r}
+n <- 5
 sim_obj <- additive_pupil_sim(n_sub = n,
                               slope_dev = 1.5,
                               sub_dev = 0.15,
@@ -59,7 +182,7 @@ for (si in 2:n) {
 ```
 
 ## Defining possible pulse locations
-In most cases it is advisable to just assume a possible demand spike/pulse (Wierda et al., 2012) at every pupil sample (i.e., every 20 ms). The 'papss' will penalize coefficients away that are not needed. However, pulses located at the end of the time range considered (here > 2500) will not be associated with a complete pupil spline basis (i.e., the pupil response will be truncated). Already Wierda et al. (2012) reported the corresponding pulses to be commonly over-estimated and recommended that it is usually a good idea to drop the pulses corresponding to the last 3-5 response functions.
+In most cases it is advisable to just assume a possible demand spike at every pupil sample (i.e., every 20 ms). However, pulses located at the end of the time range considered (here > 2500) will not be associated with a complete pupil spline basis (i.e., the pupil response will be truncated). Already Wierda et al. (2012) reported the corresponding pulses to be commonly over-estimated and recommended that it is usually a good idea to drop the pulses corresponding to the last 3-5 response functions.
 
 ```{r}
 # Calculate pulse locations
@@ -71,17 +194,18 @@ real_locations_dat <- unique(aggr_dat$time)[pulse_locations_dat]
 ```
 
 ## Recover spike weights using papss
-With the aggregates and a range of pulse locations at hand we can now attempt to recover the subjects' demand trajectories.
+With the aggregates and a range of pulse locations at hand we can now attempt to recover the subjects' demand trajectories. We set the `start_lambda` argument to 0.0 and `maxiter_outer` to 1 to ensure that the optimization goal is really just the standard least squares objective with $\hat{\mathbf{b}}$ being constrained to contain only elements larger or equal to zero. `model` is set to `"WIER_SHARED"` to tell the optimizer to add slope terms as introduced by Wierda et al. (2012).
 
 ```{r}
 # Solve pupil spline
 solvedPupil <- papss::pupil_solve(pulse_locations_dat,
                            real_locations_dat,
                            data = aggr_dat,
-                           maxiter_inner = 100000,
-                           maxiter_outer = 30,
+                           maxiter_inner = 1000000,
+                           maxiter_outer = 1,
                            model="WIER_SHARED",
-                           convergence_tol = 1e-06)
+                           convergence_tol = 1e-06,
+                           start_lambda = 0.0)
 
 recovered_coef <- solvedPupil$coef
 model_mat <- solvedPupil$modelmat
@@ -91,7 +215,7 @@ model_mat <- solvedPupil$modelmat
 It is always a good idea to inspect the model matrix more carefully. The first n column contain slope terms the remaining columns are easily visually separated into distinct blocks per subjects, showing the shifting pupil basis functions. These blocks of shifted basis functions are visualized in the second plot.
 
 ```{r}
-heatmap(model_mat, Colv = NA, Rowv = NA)
+heatmap(model_mat, Colv = NA, Rowv = NA, scale = "none")
 # Plot bases against row-index (entire time range for all subjects)
 plot(model_mat[,(n+1)],
      type="l",
@@ -102,9 +226,10 @@ for(ci in (n+2):ncol(model_mat)){
 ```
 
 ## Visualize estimates
-Finally, we can take a look at the recovered demand trajectories and predicted pupil time-courses (plotted in red against the observed true ones). The estimates obtained by 'papss' are generally very smooth and reveal that unnecessary possible spikes have been penalized away.
+Finally, we can take a look at the recovered demand trajectories and predicted pupil time-courses (plotted in red against the observed true ones). The estimates obtained here highlight the aforementioned problem surrounding the traditional NNLS estimate: the estimates are very sparse and show extreme peaks around climaxes in the true demand trajectory. The smooth ramp-ups/decreases are completely lost:
 
 ```{r}
+par(mfrow=c(1,2))
 # Re-create model matrix
 slopePredX <- papss::create_slope_term(unique(aggr_dat$time),1)
 
@@ -163,7 +288,7 @@ for(i in 1:n){
            ylab="Spike strength",lwd=3)
       lines(unique(aggr_dat$time),est_peaks_plot,col="red",lwd=3)
 }
-
+par(mfrow=c(1,1))
 # Calculate average to approximate population estimate
 pop_spike_est <- pop_spike_est/n
 
@@ -175,4 +300,355 @@ plot(unique(aggr_dat$time),sim_obj$pop_truth_demand,type="l",
            ylab="Spike strength",lwd=3)
 lines(unique(aggr_dat$time),pop_spike_est,col="red",lwd=3)
 ```
+
+
+To improve on this, we augmented the optimization objective solved by the optimizer - to reflect estimation of a penalized additive model (Wood, 2017) of the pupil:
+\begin{align}
+\bar{\mathbf{b}^{*}} = \underset{\mathbf{b}}{\operatorname{argmin}} || \mathbf{pupil}  - \mathbf{H} * \mathbf{b}||_{2}^{2} + \lambda * \mathbf{b}^{T}*\mathbf{S}*\mathbf{b}
+\end{align}
+
+```{r}
+#ToDo: Notation for lambda is soooo sloppy here, I should be ashamed.. Fix this to be closer to Wood (2017).
+```
+
+with $\bar{\mathbf{b}^{*}}$ again being subject to constraints enforcing it to contains only elements larger than or equal to zero. $\mathbf{S}$ is called a penalty matrix (Wood, 2017) and is parameterized by $\lambda$ - which the optimizer optionally estimates in an outer loop (max. number of iterations is controlled via `maxiter_outer`). Specifically, the generalized Fellner Schall update by Wood & Fasiolo is applied to $\lambda$ based on the current estimate for $\bar{\mathbf{b}^{*}}$ to maximize the restricted maximum likelihood of the **additive model of the pupil size**.
+
+```{r}
+#ToDo: Discuss why the extra penalty helps here?? What is the effect??
+# - shared penalty for all subjects -> assumption that people are similar in how demand changes in the same task -> solution should be similarly 'smooth' for all subjects (Wood, 2017).
+
+# - Penalty acts as 'improper gaussian prior' (Wood & Fasiolo, 2017) -> here NNLS also acts as uniform prior with support >= 0. This is also why we cannot calculate certainty CIs for our weights as done in 'mgcv', i.e., we violate that assumption.
+```
+
+Below we show, that this results in a much better estimate of the original demand trajectory:
+
+```{r}
+# Solve pupil spline
+solvedPupil <- papss::pupil_solve(pulse_locations_dat,
+                           real_locations_dat,
+                           data = aggr_dat,
+                           maxiter_inner = 100000,
+                           maxiter_outer = 10, # 10-15 estimations are necessary.
+                           model="WIER_SHARED",
+                           convergence_tol = 1e-06,
+                           start_lambda = 0.1) # Initial lambda MUST be > 0.0
+
+recovered_coef <- solvedPupil$coef
+model_mat <- solvedPupil$modelmat
+```
+
+```{r}
+par(mfrow=c(1,2))
+# Re-create model matrix
+slopePredX <- papss::create_slope_term(unique(aggr_dat$time),1)
+
+semiPredX <- papss::create_spike_matrix_term(unique(aggr_dat$time),
+                                      pulse_locations_dat,
+                                      n=10.1,
+                                      t_max=930,
+                                      f=1/(10^24))
+
+predMat <- cbind(slopePredX,semiPredX)
+
+slopes <- recovered_coef[1:n]
+
+pop_spike_est <- rep(0,length.out=length(unique(aggr_dat$time)))
+
+# Get estimates for each subject
+for(i in 1:n){
+      sub_i <- i
+      
+      # Get corresponding spline spike weights
+      splineCoefSub <- recovered_coef[((n + 1) + ((i - 1) * ncol(semiPredX))):(n+(i * ncol(semiPredX)))]
+      
+      # Sub coef
+      allCoefSub <- c(slopes[i],splineCoefSub)
+      subCoefMat <- matrix(0,nrow = length(allCoefSub),ncol=1)
+      subCoefMat[,1] <- allCoefSub
+      
+      # Get prediction
+      predSub <- predMat %*% subCoefMat
+      
+      # Plot
+      plot(aggr_dat$time[aggr_dat$subject == sub_i],
+         aggr_dat$pupil[aggr_dat$subject == sub_i],
+         type="l",
+         main=sub_i,
+         xlab = "time",
+         ylab="Pupil dilation (base-lined)",
+         lwd=3)
+      lines(unique(aggr_dat$time),predSub,lty=2,col="red",lwd=3)
+      
+      # Spike plot
+      true_peaks_plot <- sim_obj$sub_truth_demand[,sub_i]
+      
+      
+      est_peaks_plot <- rep(0,length.out = length(unique(aggr_dat$time)))
+      est_peaks_plot[unique(aggr_dat$time) %in%
+                    real_locations_dat[1:length(real_locations_dat)-1]] <- splineCoefSub[1:length(real_locations_dat)-1]
+      
+      # Calculate sum for average
+      pop_spike_est <- pop_spike_est + est_peaks_plot
+      
+      plot(unique(aggr_dat$time),true_peaks_plot,type="l",
+           ylim = c(0,1.5),
+           main = sub_i,
+           xlab = "time",
+           ylab="Spike strength",lwd=3)
+      lines(unique(aggr_dat$time),est_peaks_plot,col="red",lwd=3)
+}
+par(mfrow=c(1,1))
+# Calculate average to approximate population estimate
+pop_spike_est <- pop_spike_est/n
+
+# Now plot population estimate
+plot(unique(aggr_dat$time),sim_obj$pop_truth_demand,type="l",
+           ylim = c(0,1.5),
+           main = "Population level",
+           xlab = "time",
+           ylab="Spike strength",lwd=3)
+lines(unique(aggr_dat$time),pop_spike_est,col="red",lwd=3)
+```
+
+```{r}
+#ToDo: Add more details below.
+```
+
+But what happens if the solution is truely sparse? Will then not the penalized version perform worse than the traditional NNLS solution?
+
+We investigate this below. First we generate new true trajectories which are truely sparse.
+
+```{r}
+sim_obj <- additive_pupil_sim(n_sub = n,
+                              slope_dev = 0.25,
+                              sub_dev = 0.15,
+                              trial_dev = 0.25,
+                              residual_dev=3.0,
+                              should_plot=T,
+                              pulse_loc_diff=10)
+dat <- sim_obj$data
+```
+
+```{r}
+aggr_dat <- aggregate(list("pupil"=dat$pupil),by=list("subject"=dat$subject,"time"=dat$time),FUN=mean)
+
+aggr_dat <- aggr_dat[order(aggr_dat$subject),]
+
+plot(aggr_dat$time[aggr_dat$subject == 1],
+     aggr_dat$pupil[aggr_dat$subject == 1],
+     type="l",ylim=c(min(aggr_dat$pupil),
+                     max(aggr_dat$pupil)),
+     xlab="Time",
+     ylab="Pupil dilation",
+     main= "Average pupil trajectories for all subjects",
+     lwd=3)
+
+for (si in 2:n) {
+ sub_aggr_dat <- aggr_dat[aggr_dat$subject == si,]
+ lines(sub_aggr_dat$time,sub_aggr_dat$pupil,col=si,lwd=3)
+}
+
+```
+
+Now, we minimize the unpenalized objective:
+
+```{r}
+# Solve pupil spline
+solvedPupil <- papss::pupil_solve(pulse_locations_dat,
+                           real_locations_dat,
+                           data = aggr_dat,
+                           maxiter_inner = 1000000,
+                           maxiter_outer = 1,
+                           model="WIER_SHARED",
+                           convergence_tol = 1e-06,
+                           start_lambda = 0.0)
+
+recovered_coef <- solvedPupil$coef
+model_mat <- solvedPupil$modelmat
+```
+
+```{r}
+par(mfrow=c(1,2))
+# Re-create model matrix
+slopePredX <- papss::create_slope_term(unique(aggr_dat$time),1)
+
+semiPredX <- papss::create_spike_matrix_term(unique(aggr_dat$time),
+                                      pulse_locations_dat,
+                                      n=10.1,
+                                      t_max=930,
+                                      f=1/(10^24))
+
+predMat <- cbind(slopePredX,semiPredX)
+
+slopes <- recovered_coef[1:n]
+
+pop_spike_est <- rep(0,length.out=length(unique(aggr_dat$time)))
+
+# Get estimates for each subject
+for(i in 1:n){
+      sub_i <- i
+      
+      # Get corresponding spline spike weights
+      splineCoefSub <- recovered_coef[((n + 1) + ((i - 1) * ncol(semiPredX))):(n+(i * ncol(semiPredX)))]
+      
+      # Sub coef
+      allCoefSub <- c(slopes[i],splineCoefSub)
+      subCoefMat <- matrix(0,nrow = length(allCoefSub),ncol=1)
+      subCoefMat[,1] <- allCoefSub
+      
+      # Get prediction
+      predSub <- predMat %*% subCoefMat
+      
+      # Plot
+      plot(aggr_dat$time[aggr_dat$subject == sub_i],
+         aggr_dat$pupil[aggr_dat$subject == sub_i],
+         type="l",
+         main=sub_i,
+         xlab = "time",
+         ylab="Pupil dilation (base-lined)",
+         lwd=3)
+      lines(unique(aggr_dat$time),predSub,lty=2,col="red",lwd=3)
+      
+      # Spike plot
+      true_peaks_plot <- sim_obj$sub_truth_demand[,sub_i]
+      
+      
+      est_peaks_plot <- rep(0,length.out = length(unique(aggr_dat$time)))
+      est_peaks_plot[unique(aggr_dat$time) %in%
+                    real_locations_dat[1:length(real_locations_dat)-1]] <- splineCoefSub[1:length(real_locations_dat)-1]
+      
+      # Calculate sum for average
+      pop_spike_est <- pop_spike_est + est_peaks_plot
+      
+      plot(unique(aggr_dat$time),true_peaks_plot,type="l",
+           ylim = c(0,1.5),
+           main = sub_i,
+           xlab = "time",
+           ylab="Spike strength",lwd=3)
+      lines(unique(aggr_dat$time),est_peaks_plot,col="red",lwd=3)
+}
+par(mfrow=c(1,1))
+# Calculate average to approximate population estimate
+pop_spike_est <- pop_spike_est/n
+
+# Now plot population estimate
+plot(unique(aggr_dat$time),sim_obj$pop_truth_demand,type="l",
+           ylim = c(0,1.5),
+           main = "Population level",
+           xlab = "time",
+           ylab="Spike strength",lwd=3)
+lines(unique(aggr_dat$time),pop_spike_est,col="red",lwd=3)
+```
+
+And now the penalized objective:
+
+```{r}
+# Solve pupil spline
+solvedPupil <- papss::pupil_solve(pulse_locations_dat,
+                           real_locations_dat,
+                           data = aggr_dat,
+                           maxiter_inner = 100000,
+                           maxiter_outer = 10, # 10-15 estimations are necessary.
+                           model="WIER_SHARED",
+                           convergence_tol = 1e-06,
+                           start_lambda = 0.1) # Initial lambda MUST be > 0.0
+
+recovered_coef <- solvedPupil$coef
+model_mat <- solvedPupil$modelmat
+```
+
+```{r}
+par(mfrow=c(1,2))
+# Re-create model matrix
+slopePredX <- papss::create_slope_term(unique(aggr_dat$time),1)
+
+semiPredX <- papss::create_spike_matrix_term(unique(aggr_dat$time),
+                                      pulse_locations_dat,
+                                      n=10.1,
+                                      t_max=930,
+                                      f=1/(10^24))
+
+predMat <- cbind(slopePredX,semiPredX)
+
+slopes <- recovered_coef[1:n]
+
+pop_spike_est <- rep(0,length.out=length(unique(aggr_dat$time)))
+
+# Get estimates for each subject
+for(i in 1:n){
+      sub_i <- i
+      
+      # Get corresponding spline spike weights
+      splineCoefSub <- recovered_coef[((n + 1) + ((i - 1) * ncol(semiPredX))):(n+(i * ncol(semiPredX)))]
+      
+      # Sub coef
+      allCoefSub <- c(slopes[i],splineCoefSub)
+      subCoefMat <- matrix(0,nrow = length(allCoefSub),ncol=1)
+      subCoefMat[,1] <- allCoefSub
+      
+      # Get prediction
+      predSub <- predMat %*% subCoefMat
+      
+      # Plot
+      plot(aggr_dat$time[aggr_dat$subject == sub_i],
+         aggr_dat$pupil[aggr_dat$subject == sub_i],
+         type="l",
+         main=sub_i,
+         xlab = "time",
+         ylab="Pupil dilation (base-lined)",
+         lwd=3)
+      lines(unique(aggr_dat$time),predSub,lty=2,col="red",lwd=3)
+      
+      # Spike plot
+      true_peaks_plot <- sim_obj$sub_truth_demand[,sub_i]
+      
+      
+      est_peaks_plot <- rep(0,length.out = length(unique(aggr_dat$time)))
+      est_peaks_plot[unique(aggr_dat$time) %in%
+                    real_locations_dat[1:length(real_locations_dat)-1]] <- splineCoefSub[1:length(real_locations_dat)-1]
+      
+      # Calculate sum for average
+      pop_spike_est <- pop_spike_est + est_peaks_plot
+      
+      plot(unique(aggr_dat$time),true_peaks_plot,type="l",
+           ylim = c(0,1.5),
+           main = sub_i,
+           xlab = "time",
+           ylab="Spike strength",lwd=3)
+      lines(unique(aggr_dat$time),est_peaks_plot,col="red",lwd=3)
+}
+par(mfrow=c(1,1))
+# Calculate average to approximate population estimate
+pop_spike_est <- pop_spike_est/n
+
+# Now plot population estimate
+plot(unique(aggr_dat$time),sim_obj$pop_truth_demand,type="l",
+           ylim = c(0,1.5),
+           main = "Population level",
+           xlab = "time",
+           ylab="Spike strength",lwd=3)
+lines(unique(aggr_dat$time),pop_spike_est,col="red",lwd=3)
+```
+
+Both are not great - but considering that the model had 126 possible spikes available and narrowed that down to this degree the estimates are also not that bad! Most importantly, the unpenalized NNLS estimate is not visually more appealing than the penalized one. So IF the solution would truly be very sparse (unlikely - given the experiments by Wierda et al. (2012)) then the estimates still inform about the approximate time periods where demand was elevated - but differences between periods become harder to spot.
+
+## References
+
+Ang, A. (2020a). Accelerated gradient descent for large-scale optimization: On Gradient descent solving Quadratic problems—Guest lecture of MARO 201—Advanced Optimization. https://angms.science/doc/teaching/GDLS.pdf
+
+Ang, A. (2020b). Nonnegative Least Squares—PGD, accelerated PGD and with restarts. https://angms.science/doc/NMF/nnls_pgd.pdf
+
+Denison, R. N., Parker, J. A., & Carrasco, M. (2020). Modeling pupil responses to rapid sequential events. Behavior Research Methods, 52(5), 1991–2007. https://doi.org/10.3758/s13428-020-01368-6
+
+Fink, L., Simola, J., Tavano, A., Lange, E. B., Wallot, S., & Laeng, B. (2021). From pre-processing to advanced dynamic modeling of pupil data. PsyArXiv. https://doi.org/10.31234/osf.io/wqvue
+
+Hoeks, B., & Levelt, W. (1993). Pupillary dilation as a measure of attention: A quantitative system analysis. Behav. Res. Meth. Ins. C., 25, 16–26.
+
+Sutskever, I., Martens, J., Dahl, G., & Hinton, G. (2013). On the importance of initialization and momentum in deep learning. Proceedings of the 30th International Conference on Machine Learning, 1139–1147. https://proceedings.mlr.press/v28/sutskever13.html
+
+Wierda, S. M., van Rijn, H., Taatgen, N. A., & Martens, S. (2012). Pupil dilation deconvolution reveals the dynamics of attention at high temporal resolution. Proceedings of the National Academy of Sciences of the United States of America, 109(22), 8456–8460. https://doi.org/10.1073/pnas.1201858109
+
+Wood, S. N., & Fasiolo, M. (2017). A generalized Fellner-Schall method for smoothing parameter optimization with application to Tweedie location, scale and shape models. Biometrics, 73(4), 1071–1081. https://doi.org/10.1111/biom.12666
+
+Wood, S. N. (2017). Generalized Additive Models: An Introduction with R, Second Edition (2nd ed.). Chapman and Hall/CRC.
 

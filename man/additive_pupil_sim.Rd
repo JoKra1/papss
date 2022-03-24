@@ -6,13 +6,14 @@
 \usage{
 additive_pupil_sim(
   nk = 20,
-  n_subs = 10,
+  n_sub = 10,
   n_trials = 250,
-  pulse_loc_dev = 1,
+  pulse_loc_diff = 1,
   n_diff = 4,
   spars_deg = 0.5,
-  sub_dev = 0.25,
-  trial_dev = 0.25,
+  sub_dev = 0.15,
+  slope_dev = 1.5,
+  trial_dev = 0.05,
   residual_dev = 15,
   n = 10.1,
   t_max = 930,
@@ -24,15 +25,19 @@ additive_pupil_sim(
 \arguments{
 \item{nk}{Number of knots for the B-spline basis.}
 
-\item{n_subs}{How many subjects to simulate.}
+\item{n_sub}{How many subjects to simulate.}
 
 \item{n_trials}{How many trials to simulate.}
+
+\item{pulse_loc_diff}{Assume a pulse every 'pulse_loc_diff' samples (one sample = 20 ms)}
 
 \item{n_diff}{Maximum number of spline basis coefficients with systematic per-subject variation}
 
 \item{spars_deg}{The degree of sparsity enforced in spline basis coefficient vector}
 
 \item{sub_dev}{Standard deviation of normal distribution used to sample by-subject variation}
+
+\item{slope_dev}{Standard deviation of normal distribution used to sample by-subject slope variation}
 
 \item{trial_dev}{Standard deviation of normal distribution used to sample by-trial variation (in spike weights and coefficients)}
 
@@ -47,8 +52,6 @@ additive_pupil_sim(
 \item{should_plot}{Whether the generated data should be visualized.}
 
 \item{seed}{For replicability}
-
-\item{pulse_loc_diff}{Assume a pulse every 'pulse_loc_diff' samples (one sample = 20 ms)}
 }
 \description{
 Uses the pupil response function described by Hoeks & Levelt (1993)
