@@ -270,3 +270,91 @@ additive_pupil_sim <- function(nk=20,
               "time"=X,
               "data"=sim_dat))
 }
+
+#' Plot simulated pupil data against recovered weights
+#' @param n_sub How many subjects were simulate.
+#' @param aggr_dat Aggregated simulation data
+#' @param sim_obj The list returned by additive_pupil_sim
+#' @param recovered_coef The coefficients returned by papss:pupil_solve()
+#' @param pulse_locations The index vector pointing at pulse locations passed to papss:pupil_solve()
+#' @param real_locations The vector with the time-points at which pulses are assumed passed to papss:pupil_solve()
+#' @export
+plot_sim_vs_recovered <- function(n_sub,
+                                  aggr_dat,
+                                  sim_obj,
+                                  recovered_coef,
+                                  pulse_locations,
+                                  real_locations){
+
+  # First re-create model matrix, assuming Wierda et al. (2012) like setup.
+  slopePredX <- papss::create_slope_term(unique(aggr_dat$time),1)
+  
+  semiPredX <- papss::create_spike_matrix_term(unique(aggr_dat$time),
+                                               pulse_locations,
+                                               n=10.1,
+                                               t_max=930,
+                                               f=1/(10^24))
+  # Combine slope and spline terms
+  predMat <- cbind(slopePredX,semiPredX)
+  
+  # First n coefficients are the slopes for each subject
+  slopes <- recovered_coef[1:n_sub]
+  
+  # Placeholder to later collect the population estimate, i.e., a simple average.
+  pop_spike_est <- rep(0,length.out=length(unique(aggr_dat$time)))
+  
+  # Get estimates for each subject
+  for(i in 1:n_sub){
+    sub_i <- i
+    
+    # Get corresponding spline spike weights
+    splineCoefSub <- recovered_coef[((n_sub + 1) + ((i - 1) * ncol(semiPredX))):(n_sub+(i * ncol(semiPredX)))]
+    
+    # combine all subj. coefficients
+    allCoefSub <- c(slopes[i],splineCoefSub)
+    subCoefMat <- matrix(0,nrow = length(allCoefSub),ncol=1)
+    subCoefMat[,1] <- allCoefSub
+    
+    # Get prediction
+    predSub <- predMat %*% subCoefMat
+    
+    # Plot
+    plot(aggr_dat$time[aggr_dat$subject == sub_i],
+         aggr_dat$pupil[aggr_dat$subject == sub_i],
+         type="l",
+         main=sub_i,
+         xlab = "time",
+         ylab="Pupil dilation (base-lined)",
+         lwd=3)
+    lines(unique(aggr_dat$time),predSub,lty=2,col="red",lwd=3)
+    
+    # Spike plot
+    true_peaks_plot <- sim_obj$sub_truth_demand[,sub_i]
+    
+    
+    est_peaks_plot <- rep(0,length.out = length(unique(aggr_dat$time)))
+    est_peaks_plot[unique(aggr_dat$time) %in%
+                     real_locations[1:length(real_locations)-1]] <- splineCoefSub[1:length(real_locations)-1]
+    
+    # Calculate sum for average
+    pop_spike_est <- pop_spike_est + est_peaks_plot
+    
+    plot(unique(aggr_dat$time),true_peaks_plot,type="l",
+         ylim = c(0,1.5),
+         main = sub_i,
+         xlab = "time",
+         ylab="Spike strength",lwd=3)
+    lines(unique(aggr_dat$time),est_peaks_plot,col="red",lwd=3)
+  }
+  par(mfrow=c(1,1))
+  # Calculate average to approximate population estimate
+  pop_spike_est <- pop_spike_est/n_sub
+  
+  # Now plot population estimate
+  plot(unique(aggr_dat$time),sim_obj$pop_truth_demand,type="l",
+       ylim = c(0,1.5),
+       main = "Population level",
+       xlab = "time",
+       ylab="Spike strength",lwd=3)
+  lines(unique(aggr_dat$time),pop_spike_est,col="red",lwd=3)
+}
