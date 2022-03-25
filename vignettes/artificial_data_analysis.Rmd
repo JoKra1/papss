@@ -139,7 +139,7 @@ which they solve using the standard normal equations, followed by setting all im
 
 Wierda et al. (2012) suggest that the temporal resolution of their approach is truly just limited by the selected sampling rate - promising that continuous changes in demand can be revealed. However, we noticed that the gradient free optimizer struggled with identifying solutions in case spikes were assumed to happen at every sample (even in their own experiments, they averaged over 100 runs of each 100.000 optimization steps to account for these fluctuations). This repository thus provides an implementation of an accelerated projected gradient descent optimizer (Ang, 2020; Sutskever et al., 2013), which makes progress on the optimization problem much faster and more reliably (see the other vignettes on convergence properties).
 
-However, we observed that changing the optimizer was not sufficient to achieve the desired 20 ms spike spread: The NNLS estimate of $\hat{\mathbf{b}}^*$ turns out to be too sparse! We show this below for some artificial data.
+However, we observed that changing the optimizer was not sufficient to achieve the desired 20 ms spike spread: There is not enough bias constraining the NNLS estimate of $\hat{\mathbf{b}}^*$, which results in very rigid estimates that tend to over-estimate climax points in the demand trajectories! We show this below for some artificial data.
 
 ## Simulate Pupil Data
 
