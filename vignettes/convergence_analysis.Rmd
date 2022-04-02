@@ -10,7 +10,10 @@ vignette: >
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>"
+  comment = "#>",
+  fig.align = "center",
+  fig.width = 6,
+  fig.height = 4
 )
 ```
 
@@ -20,12 +23,12 @@ library(papss)
 
 ## Simulate pupil data
 
-Here we again start by simulating some pupil data. We only look at 10 subjects here
+Here we again start by simulating some pupil data. We only look at 1 subject here
 since we want to collect the history of coefficient updates this time, which quickly
 results in very large matrices.
 
 ```{r}
-n <- 5
+n <- 1
 sim_obj <- additive_pupil_sim(n_sub = n,
                               slope_dev = 1.5,
                               sub_dev = 0.15,
@@ -52,11 +55,6 @@ plot(aggr_dat$time[aggr_dat$subject == 1],
      main= "Average pupil trajectories for all subjects",
      lwd=3)
 
-for (si in 2:n) {
- sub_aggr_dat <- aggr_dat[aggr_dat$subject == si,]
- lines(sub_aggr_dat$time,sub_aggr_dat$pupil,col=si,lwd=3)
-}
-
 ```
 
 We also need to define pulse locations again.
@@ -71,6 +69,7 @@ real_locations_dat <- unique(aggr_dat$time)[pulse_locations_dat]
 ```
 
 ## Investigating the identifiability of the problems
+
 How will the solver deal with different starting values?
 
 ```{r}
@@ -85,10 +84,10 @@ for(i in 1:iter){
   solvedPupil <- papss::pupil_solve(pulse_locations_dat,
                              real_locations_dat,
                              data = aggr_dat,
-                             maxiter_inner = 10000,
+                             maxiter_inner = 100000,
                              maxiter_outer = 30,
                              model="WIER_SHARED",
-                             convergence_tol = 1e-06,
+                             convergence_tol = 1e-08,
                              should_collect_progress=T)
   
   # Coefficient history
@@ -99,9 +98,10 @@ for(i in 1:iter){
 
 ## Coefficient changes over time
 
-This looks very different - apart from the clearly identifiable slopes.
+Evidently, the time it takes the algorithm to converge differs for different starting values. However, especially towards the end the trajectories become extremely similar, already suggesting that the algorithm ultimately approaches a similar solution independent of the exact starting value.
 
 ```{r}
+par(mfrow=c(1,2))
 for(hi in 1:iter){
   chist <- hist_collection[[hi]]
   plot(1:ncol(chist),
@@ -119,14 +119,23 @@ for(hi in 1:iter){
 ```
 
 
-But what if we look only at the last column, i.e., the final estimates? Close agreement! 
+This becomes especially evident if we only look at the final estimates.
+
 ```{r}
+par(mfrow=c(1,1))
+# Visualize final coefficient set
 chist <- hist_collection[[1]]
 plot(1:nrow(chist),
        chist[,ncol(chist)],
        ylim=c(-3,3),
        xlab="Coefficient",
        ylab="Coefficient value",type="l",lwd=3)
+
+# Visualize last 25 coefficient sets
+heatmap(chist[,(ncol(chist) - 20):ncol(chist)],
+        Colv = NA,
+        Rowv = NA,
+        scale = 'none')
 
 for(hi in 2:iter){
   chist <- hist_collection[[hi]]
@@ -135,6 +144,11 @@ for(hi in 2:iter){
        ylim=c(-3,3),
        xlab="Coefficient",
        ylab="Coefficient value",type="l",lwd=3)
+  
+  heatmap(chist[,(ncol(chist) - 20):ncol(chist)],
+          Colv = NA,
+          Rowv = NA,
+          scale = 'none')
 
 
 }

@@ -62,7 +62,7 @@ legend("topright",
 
 This figure exemplifies what Hoeks & Levelt meant when they said that the pupil dilation changes slowly with time. It also highlights the contribution of the 't_max' parameter, since the pupil response peaks around 930 ms after the spike occurred.
 
-According to their analysis, the pupil dilation time-course we can monitor then is nothing but the accumulation of multiple **weighted** spikes (assuming that external conditions such as illumination and gaze direction remain stationary) - each having an additive effect on the dilation of the pupil:
+According to their analysis, the **pupil dilation time-course** we end up observing then is nothing more than the accumulation of multiple **weighted** spikes (assuming that external conditions such as illumination and gaze direction remain stationary) - each having an additive effect on the dilation of the pupil:
 
 ```{r}
 # Now lets add some more spikes - and vary their weight!
@@ -104,42 +104,45 @@ for (si in c(10,15,20)) {
 
 # And the resulting pupil dilation time-course we could actually observe!
 lines(time,pupil,lwd=3)
+
+# Merge weights for later
+betas <- c(0.3,betas)
 ```
 
-The weight of these spikes is of course only selected at random here for illustrative purposes. In practice, what researchers are interested in is to find the spike weights that most likely generated an observed pupil dilation time-course. Hoeks & Levelt recommended that this can be solved by means of least squares - which in the end boils down to solving an **additive model of the pupil size**:
+The weight of these spikes is of course only selected at random here for illustrative purposes. In practice, what researchers are interested in is to find the spike weights that most likely generated an observed pupil dilation time-course. Hoeks & Levelt recommended that this can be solved by means of least squares - which in the end boils down to solving an **additive model of the pupil size**. For our toy example with 4 spikes, this would look like this:
 
 \begin{align}
-pupil_i = \hat{\beta_{1}} * h_{1}(time_{i}) + \hat{\beta_{2}} * h_{2}(time_{i}) + \hat{\beta_{3}} * h_{3}(time_{i}) + \hat{\beta_{4}} * h_{4}(time_{i}) + \epsilon
+pupil_i = \hat{\beta_{1}} * h_{1}(time_{i}) + \hat{\beta_{2}} * h_{2}(time_{i}) + \hat{\beta_{3}} * h_{3}(time_{i}) + \hat{\beta_{4}} * h_{4}(time_{i}) + \epsilon_i
 \end{align}
 
 or more conveniently:
 
 \begin{align}
-pupil_{i} = \sum_{k=1}^{4} \hat{\beta_{k}} * h_{k}(time_{i}) + \epsilon
+pupil_{i} = \sum_{k=1}^{4} \hat{\beta_{k}} * h_{k}(time_{i}) + \epsilon_i
 \end{align}
 
-```{r}
-#ToDo: Discuss the assumption of epsilon being N(0,sigma^2)...
-```
+In a simple additive model, the $\epsilon_i$ are assumed to be normally distributed around zero. This might not necessarily be true for our pupil model and should be evaluated carefully.
 
-If then $\hat{\mathbf{b}}$ is the vector containing the individual $\beta_i$ and $\mathbf{H}$ is a matrix where each column corresponds to a $h_i$, with each row corresponding to an individual $h_i({time_{i}})$, as visualized below,
+If then $\mathbf{b}$ is a vector containing the four individual $\beta_i$ and $\mathbf{H}$ is a matrix where each of the four columns corresponds to a $h_i$, with each row corresponding to an individual $h_i({time_{i}})$ (visualized below),
 
 ```{r}
+# This is the matrix H, with 4 columns, each corresponding to one of the hi
+# visualized earlier.
 heatmap(H,Colv = NA,Rowv=NA,scale = "none")
 ```
 
 
-then they argue that:
+then they argue that one option to recover the values for the $\beta_i$ is to solve the following least squares optimization problem:
 
 \begin{align}
 \hat{\mathbf{b}} = \underset{\mathbf{b}}{\operatorname{argmin}} || \mathbf{pupil}  - \mathbf{H} * \mathbf{b}||_{2}^{2}
 \end{align}
 
-which they solve using the standard normal equations, followed by setting all implausible spikes (i.e., negative ones) to 0. This approach to obtaining a non-negative least squares (NNLS) spike weight estimate, from now on denoted as $\hat{\mathbf{b}}^*$, is sub-optimal (see Ang, 2020) and the authors acknowledged themselves that their work was limited to clearly separable and individual 'spikes in demand'. In 2012 Wierda and colleagues improved on this, by revealing that they can track more continuous-like changes in demand with 'spikes' assumed to happen every 100 ms. They relied on gradient-free constrained optimization to estimate non-negative spike weights and also introduced not just a scaling parameter to the original response function by Hoeks & Levelt, but also a slope parameter accounting for possible drifts in the pupil dilation time-course. Their algorithm iteratively improves and constraints $\hat{\mathbf{b}}^*$ to adhere to the physical limitations characterizing this estimation problem (i.e., only non-negative weights are permitted). Their work has inspired multiple replications and extensions (notably: Denison et al., 2020; see Fink et al. (2021) for a review).
+This can be solved by means of the well-known normal equations. However, since negative spikes in demand are not plausible, according to Hoeks & Levelt, they subsequently also set all implausible spikes (i.e., negative ones) in $\hat{\mathbf{b}}$ to 0. This approach to obtaining a **non-negative least squares** (NNLS) spike weight estimate, from now on denoted as $\hat{\mathbf{b}}^*$, is sub-optimal (see Ang, 2020) and the authors acknowledged themselves that their work was limited to clearly separable and individual 'spikes in demand'. In 2012 Wierda and colleagues improved on this, by revealing that they can track more continuous-like changes in demand with 'spikes' assumed to happen every 100 ms. They relied on gradient-free constrained optimization to estimate non-negative spike weights and also introduced not just a scaling parameter to the original response function by Hoeks & Levelt, but also a slope parameter accounting for possible drifts in the pupil dilation time-course. Their algorithm iteratively improves and constrains $\hat{\mathbf{b}}^*$ to adhere to the physical limitations characterizing this estimation problem (i.e., only non-negative weights are permitted). Their work has inspired multiple replications and extensions (notably: Denison et al., 2020; see Fink et al. (2021) for a review).
 
 Wierda et al. (2012) suggest that the temporal resolution of their approach is truly just limited by the selected sampling rate - promising that continuous changes in demand can be revealed. However, we noticed that the gradient free optimizer struggled with identifying solutions in case spikes were assumed to happen at every sample (even in their own experiments, they averaged over 100 runs of each 100.000 optimization steps to account for these fluctuations). This repository thus provides an implementation of an accelerated projected gradient descent optimizer (Ang, 2020; Sutskever et al., 2013), which makes progress on the optimization problem much faster and more reliably (see the other vignettes on convergence properties).
 
-However, we observed that changing the optimizer was not sufficient to achieve the desired 20 ms spike spread: There is not enough bias constraining the NNLS estimate of $\hat{\mathbf{b}}^*$, which results in very rigid estimates that tend to over-estimate climax points in the demand trajectories! We show this below for some artificial data.
+However, we observed that changing the optimizer was not sufficient to achieve the desired 20 ms spike spread: There is not enough bias constraining the NNLS estimate of $\hat{\mathbf{b}}^*$, which results in very flexible estimates that tend to over-estimate climax points in the demand trajectories and to show high variance! We show this below for some artificial data.
 
 ## Simulate Pupil Data
 
@@ -158,7 +161,7 @@ dat <- sim_obj$data
 
 ## Aggregate
 
-We now need to aggregate the trial-level data. The code below forms simple averages over time and subject. This is fine if all trials are subject to the same experimental manipulations but is not that informative if the experimental setup contains multiple manipulations (e.g., different (categorical) types of stimuli, or a manipulations of a continuous predictor variable). In that case, it is preferable to estimate an additive model of the pupil (for example using 'mgcv', see Wood (2017)) that takes into account the effects of these predictors on the size of the pupil. These 'smart aggregates' of the pupil can then be used to predict the pupil dilation time-course for specific constellations of the predictors taken into account by the model. The averages below can then be replaced with these estimates.
+We now need to aggregate the trial-level data. The code below forms simple averages over time and subject. This is fine if all trials are subject to the same experimental manipulations but is not that informative if the experimental setup contains multiple manipulations (e.g., different (categorical) types of stimuli, or a manipulations of a continuous predictor variable). In that case, it is preferable to estimate an additive model of the pupil (for example using 'mgcv', see Wood (2017)) that takes into account the effects of these predictors on the size of the pupil. These 'smart aggregates' of the pupil can then be used to predict the pupil dilation time-course for specific constellations of the predictors taken into account by the model. The averages below can then be replaced with these pupil dilation time-course predictions.
 
 ```{r}
 # ToDo: Use smart-aggregates here instead of averaging.
@@ -183,7 +186,8 @@ for (si in 2:n) {
 ```
 
 ## Defining possible pulse locations
-In most cases it is advisable to just assume a possible demand spike at every pupil sample (i.e., every 20 ms). However, pulses located at the end of the time range considered (here > 2500) will not be associated with a complete pupil spline basis (i.e., the pupil response will be truncated). Already Wierda et al. (2012) reported the corresponding pulses to be commonly over-estimated and recommended that it is usually a good idea to drop the pulses corresponding to the last 3-5 response functions.
+
+In most cases it is advisable to just assume a possible demand spike at every pupil sample (i.e., every 20 ms in case the observed pupil dilatiopn time-course was down-sampled to 50 HZ). However, pulses located at the end of the time range considered (here > 2500) will not be associated with a complete pupil spline basis (i.e., the pupil response will be truncated). Already Wierda et al. (2012) reported the corresponding pulses to be commonly over-estimated and recommended that it is usually a good idea to drop the pulses corresponding to the last 3-5 response functions.
 
 ```{r}
 # Calculate pulse locations
@@ -195,7 +199,8 @@ real_locations_dat <- unique(aggr_dat$time)[pulse_locations_dat]
 ```
 
 ## Recover spike weights using papss
-With the aggregates and a range of pulse locations at hand we can now attempt to recover the subjects' demand trajectories. We set the `start_lambda` argument to 0.0 and `maxiter_outer` to 1 to ensure that the optimization goal is really just the standard least squares objective with $\hat{\mathbf{b}}$ being constrained to contain only elements larger or equal to zero. `model` is set to `"WIER_SHARED"` to tell the optimizer to add slope terms as introduced by Wierda et al. (2012).
+
+With the aggregates and a range of possible pulse locations at hand we can now attempt to recover the subjects' demand trajectories. We set the `start_lambda` argument to 0.0 and `maxiter_outer` to 1 to ensure that the optimization goal is really just the standard least squares objective with $\hat{\mathbf{b}}$ being constrained to contain only elements larger or equal to zero. `model` is set to `"WIER_SHARED"` to tell the optimizer to add slope terms for each subject's average pupil dilation time-course as introduced by Wierda et al. (2012).
 
 ```{r}
 # Solve pupil spline
@@ -213,7 +218,8 @@ model_mat <- solvedPupil$modelmat
 ```
 
 ## Visualizing model setup
-It is always a good idea to inspect the model matrix more carefully. The first n column contain slope terms the remaining columns are easily visually separated into distinct blocks per subjects, showing the shifting pupil basis functions. These blocks of shifted basis functions are visualized in the second plot.
+
+It is a good idea to also inspect the model matrix from this more complex model. The first n column contain slope terms. The remaining columns are easily visually separated into distinct blocks per subjects, showing the shifting pupil basis functions. These blocks of shifted basis functions can are also visualized in the second plot.
 
 ```{r}
 heatmap(model_mat, Colv = NA, Rowv = NA, scale = "none")
@@ -227,7 +233,7 @@ for(ci in (n+2):ncol(model_mat)){
 ```
 
 ## Visualize estimates
-Finally, we can take a look at the recovered demand trajectories and predicted pupil time-courses (plotted in red against the observed true ones). The estimates obtained here highlight the aforementioned problem surrounding the traditional NNLS estimate: the estimates are very sparse and show extreme peaks around climaxes in the true demand trajectory. The smooth ramp-ups/decreases are completely lost:
+Finally, we can take a look at the recovered demand trajectories and predicted pupil time-courses (plotted in red against the observed true ones). The estimates obtained here highlight the aforementioned problem surrounding the traditional NNLS estimate: the estimates show extreme peaks around climaxes in the true demand trajectory and generally high variance. Especially for individual subjects, the smooth ramp-ups/decreases are completely lost:
 
 ```{r}
 par(mfrow=c(1,2))
@@ -249,134 +255,51 @@ legend("topright",
 ```
 
 
-To improve on this, we augmented the optimization objective solved by the optimizer - to reflect estimation of a penalized additive model (Wood, 2017) of the pupil:
+To improve on this, we augmented the optimization objective solved by the optimizer - to reflect estimation of a penalized additive model (Wood, 2017) of the pupil. For our toy-problem with four possible spikes, the optimization goal is now to find the set of weights that minimzes:
+
+
 \begin{align}
 \bar{\mathbf{b}^{*}} = \underset{\mathbf{b}}{\operatorname{argmin}} || \mathbf{pupil}  - \mathbf{H} * \mathbf{b}||_{2}^{2} + \lambda * \mathbf{b}^{T}*\mathbf{S}*\mathbf{b}
 \end{align}
 
-```{r}
-#ToDo: Notation for lambda is soooo sloppy here, I should be ashamed.. Fix this to be closer to Wood (2017).
-```
+with $\bar{\mathbf{b}^{*}}$ again being subject to constraints enforcing it to contain only non-negative elements. $\mathbf{S}$ is called a penalty matrix (Wood, 2017).
 
-with $\bar{\mathbf{b}^{*}}$ again being subject to constraints enforcing it to contains only elements larger than or equal to zero. $\mathbf{S}$ is called a penalty matrix (Wood, 2017) and is parameterized by $\lambda$ - which the optimizer optionally estimates in an outer loop (max. number of iterations is controlled via `maxiter_outer`). Specifically, the generalized Fellner Schall update by Wood & Fasiolo is applied to $\lambda$ based on the current estimate for $\bar{\mathbf{b}^{*}}$ to maximize the restricted maximum likelihood of the **additive model of the pupil size**.
 
-```{r}
-#ToDo: Discuss why the extra penalty helps here?? What is the effect??
-# - shared penalty for all subjects -> assumption that people are similar in how demand changes in the same task -> solution should be similarly 'smooth' for all subjects (Wood, 2017).
-
-# - Penalty acts as 'improper gaussian prior' (Wood & Fasiolo, 2017) -> here NNLS also acts as uniform prior with support >= 0. This is also why we cannot calculate certainty CIs for our weights as done in 'mgcv', i.e., we violate that assumption.
-```
-
-Below we show, that this results in a much better estimate of the original demand trajectory:
+In the current toy example, $\mathbf{S}$ would be a 4 by 4 matrix. The content of the matrix controls what aspects of the model are penalized specifically. For example, setting $\mathbf{S}$ to a 4by 4 identity matrix:
 
 ```{r}
-# Solve pupil spline
-solvedPupil <- papss::pupil_solve(pulse_locations_dat,
-                           real_locations_dat,
-                           data = aggr_dat,
-                           maxiter_inner = 100000,
-                           maxiter_outer = 10, # 10-15 estimations are necessary.
-                           model="WIER_SHARED",
-                           convergence_tol = 1e-06,
-                           start_lambda = 0.1) # Initial lambda MUST be > 0.0
+S <- diag(nrow=4,ncol=4)
 
-recovered_coef <- solvedPupil$coef
-model_mat <- solvedPupil$modelmat
+print(S)
 ```
+
+ensures that the squared Euclidean norm of the current estimate $\bar{\mathbf{b}^{*}}$ weighed by $\lambda$ is added to the optimization problem:
 
 ```{r}
-par(mfrow=c(1,2))
+b_hat <- matrix(betas,ncol = 1)
+lambda <- 0.1
 
-plot_sim_vs_recovered(n,
-                      aggr_dat,
-                      sim_obj,
-                      recovered_coef,
-                      pulse_locations_dat,
-                      real_locations_dat)
+# Calculating the penalty for a given lambda.
+penalty <- lambda * t(b_hat) %*% S %*% b_hat
 
-legend("topright",
-       c("True trajectory","Penalized papss estimate"),
-       col=c("black","red"),
-       lwd=3,
-       lty=1)
+# The alternative way to calculate this, without matrix operations:
+penalty_alt <- lambda * sum(betas**2)
+
+# These should be equal:
+print(all.equal(penalty[1,1],penalty_alt))
 ```
+
+This recovers the [ridge regression optimization goal](https://scikit-learn.org/stable/modules/linear_model.html#ridge-regression), where coefficients are drawn towards zero (this is referred to as `shrinkage`). The framework of penalized additive models howevers permits for a broad range of different penalty matrices (even for combining multiple penalty matrices). The interested reader should consult Wood's introduction to generalized additive models (2017).
+
+As briefly mentioned before the penalty matrix is parameterized by $\lambda$ (more specifically, the degree to which the penalty influences the optimization objective depends on the value of $\lambda$) - which the optimizer optionally estimates in an outer loop (max. number of iterations is controlled via `maxiter_outer`) for the current (i.e., given the current value for $\lambda$) best NNLS estimate $\bar{\mathbf{b}^{*}}$. More specifically, the generalized Fellner Schall update by Wood & Fasiolo is applied to $\lambda$ based on the current estimate for $\bar{\mathbf{b}^{*}}$ to maximize the restricted maximum likelihood of the **penalized additive model of the pupil size**.
+
+Apart from reducing the variance in the estimator, adding the penalty also allows to make explicit the assumption that demand should change similarly for subjects. Since the same lambda value can be shared by multiple smooths' penalties (`mgcv` does this for the [factor-smooth basis](https://www.rdocumentation.org/packages/mgcv/versions/1.8-26/topics/smooth.construct.fs.smooth.spec), set via `bs=fs`.), a shared penalty can be enforced for all subjects. This enforces that the individual spike trajectories recovered for each subject, must be similarly smooth (Wood, 2017).
 
 ```{r}
-#ToDo: Add more details below.
+#ToDo: Discuss  that penalty acts as 'improper gaussian prior' (Wood & Fasiolo, 2017) -> here NNLS also acts as uniform prior with support >= 0. This is also why we cannot calculate certainty CIs for our weights as done in 'mgcv', i.e., we violate that assumption.
 ```
 
-But what happens if the solution is truly extremely sparse? Will then not the penalized version perform worse than the traditional NNLS solution?
-
-We investigate this below. First we generate new true trajectories which are truely sparse.
-
-```{r}
-# Overall the signal amplitude is lower with less spikes.
-sim_obj <- additive_pupil_sim(n_sub = n,
-                              slope_dev = 0.25, # Thus, slope dev. needs to be lower
-                              sub_dev = 0.15,
-                              trial_dev = 0.25,
-                              residual_dev=3.0, # And noise needs to be lowered
-                              should_plot=T,
-                              pulse_loc_diff=10)
-dat <- sim_obj$data
-```
-
-```{r}
-aggr_dat <- aggregate(list("pupil"=dat$pupil),by=list("subject"=dat$subject,"time"=dat$time),FUN=mean)
-
-aggr_dat <- aggr_dat[order(aggr_dat$subject),]
-
-plot(aggr_dat$time[aggr_dat$subject == 1],
-     aggr_dat$pupil[aggr_dat$subject == 1],
-     type="l",ylim=c(min(aggr_dat$pupil),
-                     max(aggr_dat$pupil)),
-     xlab="Time",
-     ylab="Pupil dilation",
-     main= "Average pupil trajectories for all subjects",
-     lwd=3)
-
-for (si in 2:n) {
- sub_aggr_dat <- aggr_dat[aggr_dat$subject == si,]
- lines(sub_aggr_dat$time,sub_aggr_dat$pupil,col=si,lwd=3)
-}
-
-```
-
-Now, we minimize the unpenalized objective:
-
-```{r}
-# Solve pupil spline
-solvedPupil <- papss::pupil_solve(pulse_locations_dat,
-                           real_locations_dat,
-                           data = aggr_dat,
-                           maxiter_inner = 1000000,
-                           maxiter_outer = 1,
-                           model="WIER_SHARED",
-                           convergence_tol = 1e-06,
-                           start_lambda = 0.0)
-
-recovered_coef <- solvedPupil$coef
-model_mat <- solvedPupil$modelmat
-```
-
-```{r}
-par(mfrow=c(1,2))
-
-plot_sim_vs_recovered(n,
-                      aggr_dat,
-                      sim_obj,
-                      recovered_coef,
-                      pulse_locations_dat,
-                      real_locations_dat)
-
-legend("topright",
-       c("True trajectory","Unpenalized papss estimate"),
-       col=c("black","red"),
-       lwd=3,
-       lty=1)
-```
-
-And now the penalized objective:
+Below we show, that an identity penalty with shared $\lambda$ term, placed on the coefficients of each subject's pupil spline, results in a much better estimate of the original demand trajectory:
 
 ```{r}
 # Solve pupil spline
@@ -410,7 +333,11 @@ legend("topright",
        lty=1)
 ```
 
-Both are not great - but considering that the model had 126 possible spikes available and narrowed that down to this degree the estimates are also not that bad! Most importantly, the unpenalized NNLS estimate is not visually more appealing than the penalized one. So IF the solution would truly be very sparse (unlikely - given the experiments by Wierda et al. (2012)) then the estimates still inform about the approximate time periods where demand was elevated - but differences between periods become harder to spot.
+## Final remarks
+
+`papss` offers multiple model setups, not just one inspired by Wierda et al.'s setup (i.e., with extra slope terms). Dension et al. (2020) for example included intercept terms for each subject, and setting `model="DEN_SHARED"` will  similarly estimate intercept terms instead of slope terms, while setting `model=WIER_DEN_SHARED` will estimate both intercept and slope terms for each subject.
+
+The demand on the population level was here calculated simply by averaging over all subject's individual recovered trajectories. If there is a lot of by-subject variation, then averaging will not be appropriate. Additive mixed effect models should be used instead (Wood, 2017). However, using the individual subjects' demand trajectories directly as dependent variable for an additive model might not be appropriate because demand is constrained to be non-negative. Fortunately in most experiments the research goal of interest would involve comparing demand levels between two or more conditions. In that case, demand difference curves can be calculated for each subject, which can then be used as dependent variable for an additive mixed model. The model should include a fixed smooth over time and factor-smooths over time for each subject (see Wood, 2017). The fixed effect will then easily reveal during which periods demand was significantly different between the experimental conditions on the population level.
 
 ## References
 
