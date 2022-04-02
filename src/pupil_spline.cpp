@@ -215,6 +215,17 @@ void enforceConstraints(Eigen::VectorXd &cf, const Rcpp::StringVector &constrain
     }
 }
 
+// Calculate GCV - General Cross Validation score (Wood, 2017).
+// Calculation based on Wood (2017)
+double calculateGCV(int n, double sqrRes, const Eigen::MatrixXd &Q)
+{
+    Eigen::MatrixXd A = Q * Q.transpose();
+    double num = n * sqrRes;
+    double denom = pow(n - A.trace(), 2);
+
+    return num / denom;
+}
+
 // Gradient descent optimizer with momentum and restarts. The momentum update
 // rule is the one discussed by Sutskever et al. (2013) that is also discussed (in slightly
 // alternated form) in the lecture series by Ang (2020). Allows for a projection step
@@ -558,16 +569,15 @@ Rcpp::List wrapAmSolve(const Eigen::Map<Eigen::MatrixXd> X,
         int totalIters = cfHistory.size();
 
         // Number of coefs
-        int n_coef  = cf.rows();
+        int n_coef = cf.rows();
 
         // Prepare matrix to be filled with updates to coefficients over iters (cols).
         cfHistMat = Eigen::MatrixXd::Zero(n_coef, totalIters);
-        
+
         for (int i = 0; i < totalIters; ++i)
         {
             cfHistMat.block(0, i, n_coef, 1) = cfHistory[i];
         }
-        
     }
 
     return Rcpp::List::create(Rcpp::Named("coefficients") = cf,
