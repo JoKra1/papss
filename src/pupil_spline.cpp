@@ -215,17 +215,6 @@ void enforceConstraints(Eigen::VectorXd &cf, const Rcpp::StringVector &constrain
     }
 }
 
-// Calculate GCV - General Cross Validation score (Wood, 2017).
-// Calculation based on Wood (2017)
-double calculateGCV(int n, double sqrRes, const Eigen::MatrixXd &Q)
-{
-    Eigen::MatrixXd A = Q * Q.transpose();
-    double num = n * sqrRes;
-    double denom = pow(n - A.trace(), 2);
-
-    return num / denom;
-}
-
 // Gradient descent optimizer with momentum and restarts. The momentum update
 // rule is the one discussed by Sutskever et al. (2013) that is also discussed (in slightly
 // alternated form) in the lecture series by Ang (2020). Allows for a projection step
@@ -419,6 +408,25 @@ int solveAM(Eigen::VectorXd &cf,
                      tol,
                      shouldCollectProgress);
 
+        // Now we calculate the current error term to check whether we can terminate
+        // or whether lambda should still be optimized.
+        Eigen::VectorXd res = f - R * cf;
+        double errDot = res.dot(res) + r;
+
+        // Crude convergence control
+        double absErrDiff = errDot > prevErr ? errDot - prevErr : prevErr - errDot;
+        prevErr = errDot;
+
+        if (absErrDiff < tol)
+        {
+            convCode = 0;
+            break;
+        }
+
+        // Always exit early if only one outer step is required.
+        if (maxIter == 1)
+            break;
+
         // Now calculate the next step in the stable LS approach:
         // QR decomposition based on R + Cholesky factor of embS.
 
@@ -481,24 +489,12 @@ int solveAM(Eigen::VectorXd &cf,
         Eigen::MatrixXd gInv = ginvDecomp.pseudoInverse();
 
         // f and r also need to be recomputed.
-        Eigen::VectorXd f2 = Q2.transpose() * y;
-        double r2 = y.dot(y) - f2.dot(f2);
+        // Eigen::VectorXd f2 = Q2.transpose() * y;
+        // double r2 = y.dot(y) - f2.dot(f2);
 
         // Finally we need to calculate the current estimate of sigma^2.
-        Eigen::VectorXd res = f2 - R2 * P2.transpose() * cf;
-        double errDot = res.dot(res) + r2;
         sigma = errDot / (rowsX - (Inv * R.transpose() * R).trace());
         // Rcpp::Rcout << sigma << "\n";
-
-        // Crude convergence control
-        double absErrDiff = errDot > prevErr ? errDot - prevErr : prevErr - errDot;
-        prevErr = errDot;
-
-        if (absErrDiff < tol)
-        {
-            convCode = 0;
-            break;
-        }
 
         // Now we can update all lamda terms.
         cInd = startIndex;
