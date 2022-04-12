@@ -36,7 +36,7 @@ vignette("artificial_data_analysis", package="papss") // Browse vignette directl
 ```
 
 ## ToDo:
-- Add GCV optimization
+- Add CV score optimization?
 - Implement difference penalty (Eilers & Marx, 1996; Wood, 2017)
 
 ## References:
