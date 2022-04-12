@@ -312,7 +312,7 @@ pupil_solve <- function(pulse_locations,real_locations,
                         t_max=930,f=1/(10^24),
                         maxiter_inner=10000,
                         maxiter_outer=25,
-                        convergence_tol=1e-06,
+                        convergence_tol=1e-08,
                         should_collect_progress=F,
                         start_lambda=0.1,
                         init_cf = NULL) {
