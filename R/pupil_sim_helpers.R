@@ -284,12 +284,17 @@ plot_sim_vs_recovered <- function(n_sub,
                                   sim_obj,
                                   recovered_coef,
                                   pulse_locations,
-                                  real_locations){
+                                  real_locations,
+                                  pulses_in_time,
+                                  expanded_time,
+                                  expanded_by){
 
   # First re-create model matrix, assuming Wierda et al. (2012) like setup.
   slopePredX <- papss::create_slope_term(unique(aggr_dat$time),1)
   
-  semiPredX <- papss::create_spike_matrix_term(unique(aggr_dat$time),
+  semiPredX <- papss::create_spike_matrix_term(unique(expanded_time),
+                                               expanded_by,
+                                               unique(aggr_dat$time),
                                                pulse_locations,
                                                n=10.1,
                                                t_max=930,
@@ -334,7 +339,7 @@ plot_sim_vs_recovered <- function(n_sub,
     
     est_peaks_plot <- rep(0,length.out = length(unique(aggr_dat$time)))
     est_peaks_plot[unique(aggr_dat$time) %in%
-                     real_locations[1:length(real_locations)-1]] <- splineCoefSub[1:length(real_locations)-1]
+                     real_locations[pulses_in_time]] <- splineCoefSub[pulses_in_time]
     
     # Calculate sum for average
     pop_spike_est <- pop_spike_est + est_peaks_plot

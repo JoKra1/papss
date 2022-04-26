@@ -47,7 +47,7 @@ pulse_locations <- seq(1,length(time),by=1)
 # that happened during the 5th. sample.
 # Note that the 'f' parameter was added later by Wierda et al. (2012) to
 # scale the response of the pupil to a spike of fixed strength.
-pupil_dilation <- h_basis(5,time,pulse_locations,n=10.1,t_max=930,f=1/(10^24))
+pupil_dilation <- h_basis(5,time,0,time,pulse_locations,n=10.1,t_max=930,f=1/(10^24))
 
 # Which we can now visualize...
 plot(time,pupil_dilation,typ="l",lwd=3,xlab="time",ylab="Pupil dilation")
@@ -73,7 +73,7 @@ pupil <- rep(0,length.out=length(time))
 # We now refer to the resulting variables as h_{i}, the purpose will become
 # clear in the new paragraph.
 H <- matrix(nrow=length(time),ncol = 4)
-h1 <- h_basis(5,time,pulse_locations,n=10.1,t_max=930,f=1/(10^24))
+h1 <- h_basis(5,time,0,time,pulse_locations,n=10.1,t_max=930,f=1/(10^24))
 H[,1] <- h1
 # Don't forget to add the weighted contribution of this spike to the overall time-course
 pupil <- pupil + 0.3 * h1
@@ -93,7 +93,7 @@ betas <- runif(3)
 # Now add more spikes!
 iw <- 1
 for (si in c(10,15,20)) {
-  hi <- h_basis((si*3),time,pulse_locations,n=10.1,t_max=930,f=1/(10^24))
+  hi <- h_basis((si*3),time,0,time,pulse_locations,n=10.1,t_max=930,f=1/(10^24))
   pupil <- pupil + betas[iw] * hi
   H[,(iw+1)] <- hi
   
@@ -194,14 +194,7 @@ for (si in 2:n) {
 
 Based on the findings by Wierda et al. (2012), that demand changes more like a continuous signal, the most sensible assumption regarding 'spike locations' is to assume a possible demand spike at every pupil sample (i.e., every 20 ms in case the observed pupil dilatiopn time-course was down-sampled to 50 HZ). However, pulses located at the end of the time range considered (here > 2500) will not be associated with a complete pupil spline basis (i.e., the pupil response will be truncated). Already Wierda et al. (2012) reported the corresponding pulses to be commonly over-estimated and recommended that it is usually a good idea to zero-out the pulses corresponding to the last 3-5 response functions.
 
-```{r}
-# Calculate pulse locations
-last_pulse_dat <- length(unique(aggr_dat$time)) - (3 * round(930/100)) - 1
-  
-# Define possible pulse location
-pulse_locations_dat <- seq(1,last_pulse_dat,1)
-real_locations_dat <- unique(aggr_dat$time)[pulse_locations_dat]
-```
+
 
 ## Recover spike weights using papss
 
@@ -209,13 +202,14 @@ With the aggregates and a range of possible pulse locations at hand we can now a
 
 ```{r}
 # Solve pupil spline
-solvedPupil <- papss::pupil_solve(pulse_locations_dat,
-                           real_locations_dat,
+solvedPupil <- papss::pupil_solve(pulse_spacing = 1,
                            data = aggr_dat,
                            maxiter_inner = 1000000,
                            maxiter_outer = 1,
                            model="WIER_SHARED",
-                           start_lambda = 0.0)
+                           start_lambda = 0.0,
+                           expand_by = 600,
+                           pulse_dropping_factor = 3.5)
 
 recovered_coef <- solvedPupil$coef
 model_mat <- solvedPupil$modelmat
@@ -248,8 +242,11 @@ plot_sim_vs_recovered(n,
                       aggr_dat,
                       sim_obj,
                       recovered_coef,
-                      pulse_locations_dat,
-                      real_locations_dat)
+                      solvedPupil$pulseLocations,
+                      solvedPupil$realLocations,
+                      solvedPupil$pulsesInTime,
+                      solvedPupil$expandedTime,
+                      (600/20))
 
 legend("topright",
        c("True trajectory","Unpenalized papss estimate"),
@@ -307,13 +304,14 @@ Below we show, that applying the aforementioned update rule results in a much be
 
 ```{r}
 # Solve pupil spline
-solvedPupil <- papss::pupil_solve(pulse_locations_dat,
-                           real_locations_dat,
+solvedPupil <- papss::pupil_solve(pulse_spacing = 1,
                            data = aggr_dat,
                            maxiter_inner = 100000,
-                           maxiter_outer = 10, # 10-15 estimations are usually necessary to converge.
+                           maxiter_outer = 10,
                            model="WIER_SHARED",
-                           start_lambda = 0.1) # Initial lambda MUST be > 0.0
+                           start_lambda = 0.1,
+                           expand_by = 600,
+                           pulse_dropping_factor = 3.5)
 
 recovered_coef <- solvedPupil$coef
 model_mat <- solvedPupil$modelmat
@@ -326,8 +324,11 @@ plot_sim_vs_recovered(n,
                       aggr_dat,
                       sim_obj,
                       recovered_coef,
-                      pulse_locations_dat,
-                      real_locations_dat)
+                      solvedPupil$pulseLocations,
+                      solvedPupil$realLocations,
+                      solvedPupil$pulsesInTime,
+                      solvedPupil$expandedTime,
+                      (600/20))
 
 legend("topright",
        c("True trajectory","Penalized papss estimate"),
