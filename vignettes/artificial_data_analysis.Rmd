@@ -208,8 +208,8 @@ solvedPupil <- papss::pupil_solve(pulse_spacing = 1,
                            maxiter_outer = 1,
                            model="WIER_SHARED",
                            start_lambda = 0.0,
-                           expand_by = 600,
-                           pulse_dropping_factor = 3.5)
+                           expand_by = 500,
+                           pulse_dropping_factor = 3)
 
 recovered_coef <- solvedPupil$coef
 model_mat <- solvedPupil$modelmat
@@ -246,7 +246,7 @@ plot_sim_vs_recovered(n,
                       solvedPupil$realLocations,
                       solvedPupil$pulsesInTime,
                       solvedPupil$expandedTime,
-                      (600/20))
+                      (500/20))
 
 legend("topright",
        c("True trajectory","Unpenalized papss estimate"),
@@ -310,8 +310,8 @@ solvedPupil <- papss::pupil_solve(pulse_spacing = 1,
                            maxiter_outer = 10,
                            model="WIER_SHARED",
                            start_lambda = 0.1,
-                           expand_by = 600,
-                           pulse_dropping_factor = 3.5)
+                           expand_by = 500,
+                           pulse_dropping_factor = 3)
 
 recovered_coef <- solvedPupil$coef
 model_mat <- solvedPupil$modelmat
@@ -328,7 +328,7 @@ plot_sim_vs_recovered(n,
                       solvedPupil$realLocations,
                       solvedPupil$pulsesInTime,
                       solvedPupil$expandedTime,
-                      (600/20))
+                      (500/20))
 
 legend("topright",
        c("True trajectory","Penalized papss estimate"),
