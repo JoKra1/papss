@@ -369,6 +369,11 @@ pupil_solve <- function(pulse_spacing,
     stop("Model not specified.")
   }
   
+  # Basic identifiable check
+  if(ncol(setup$X) > nrow(setup$X)) {
+    stop("Model is not identifiable, reduce `expand_by` or increase `pulse_dropping_factor`.")
+  }
+  
   # Initialize coefficients if none are provided
   if(is.null(init_cf)){
     init_cf <- matrix(nrow=ncol(setup$X),ncol=1)
