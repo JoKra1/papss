@@ -287,7 +287,9 @@ plot_sim_vs_recovered <- function(n_sub,
                                   real_locations,
                                   pulses_in_time,
                                   expanded_time,
-                                  expanded_by){
+                                  expanded_by,
+                                  f_est,
+                                  scaling_factor=0){
 
   # First re-create model matrix, assuming Wierda et al. (2012) like setup.
   slopePredX <- papss::create_slope_term(unique(aggr_dat$time),1)
@@ -298,7 +300,7 @@ plot_sim_vs_recovered <- function(n_sub,
                                                pulse_locations,
                                                n=10.1,
                                                t_max=930,
-                                               f=1/(10^24))
+                                               f=f_est)
   # Combine slope and spline terms
   predMat <- cbind(slopePredX,semiPredX)
   
@@ -322,6 +324,8 @@ plot_sim_vs_recovered <- function(n_sub,
     
     # Get prediction
     predSub <- predMat %*% subCoefMat
+    
+    splineCoefSub <- splineCoefSub * scaling_factor
     
     # Plot
     plot(aggr_dat$time[aggr_dat$subject == sub_i],
