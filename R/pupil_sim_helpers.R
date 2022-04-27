@@ -288,8 +288,8 @@ plot_sim_vs_recovered <- function(n_sub,
                                   pulses_in_time,
                                   expanded_time,
                                   expanded_by,
-                                  f_est,
-                                  scaling_factor=0){
+                                  f_est=1/(10^24),
+                                  scaling_factor=1){
 
   # First re-create model matrix, assuming Wierda et al. (2012) like setup.
   slopePredX <- papss::create_slope_term(unique(aggr_dat$time),1)
