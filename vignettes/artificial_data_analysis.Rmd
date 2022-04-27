@@ -192,11 +192,11 @@ for (si in 2:n) {
 
 ## Defining possible pulse locations
 
-Based on the findings by Wierda et al. (2012), that demand changes more like a continuous signal, the most sensible assumption regarding 'spike locations' is to assume a possible demand spike at every pupil sample (i.e., every 20 ms in case the observed pupil dilatiopn time-course was down-sampled to 50 HZ). However, pulses located at the end of the time range considered (here > 2500) will not be associated with a complete pupil spline basis (i.e., the pupil response will be truncated). Already Wierda et al. (2012) reported the corresponding pulses to be commonly over-estimated and recommended that it is usually a good idea to zero-out the pulses corresponding to the last 3-5 response functions.
+Based on the findings by Wierda et al. (2012), that demand changes more like a continuous signal, the most sensible assumption regarding 'spike locations' is to assume a possible demand spike at every pupil sample (i.e., every 20 ms in case the observed pupil dilatiopn time-course was down-sampled to 50 HZ). Papss automatically calculated the possible locations, the spacing between spikes is controlled via the `pulse_spacing` argument. As argued before, this should usually be set to 1.
 
+Additionally, an important question to consider is where to start assuming spikes in demand. In the simulation here, demand really starts to increase only within the time-window of interest. That is a reasonable assumption if we can establish a robust baseline period, so that after subtracting the baseline from our pupil signal the signal starts with an amplitude of zero and then only increases after stimulus onset, at which point demand can safely be assumed to start increasing. However, establishing such a robust baseline is often difficult with real data. It might be that already before stimulus onset, demand fluctuates. Because of the lagged pupil response, pulses outside of the time-window (here pulses before time-point 0) will still influence the pupil response within the time-window of interest. Papss by default tries to correct for this possibility, by modelling truncated pupil basis response functions that would originate from pulses within 500 ms before the time-window of interest (controlled via the `expand_by` argument). Pulses even further away are usually not that crucial to model, because even if these play a role, then the outsider pulses before 500 ms will simply be slightly over-estimated to compensate for this. It is also not possible to model even more pulses, because then the number of columns in the model matrix will quickly exceed the number of rows (data-points), which will render the problem unidentifiable. If it is absolutely crucial to estimate much earlier pulses, then the `pulse_dropping_factor` can be increased, which controls how many pulses are dropped at the end of the time-window. As discussed by Wierda et al., pulses far towards the end of the time-window are often over-estimated as well, and by default papss thus drops some of those. Increasing the amount of dropped pulses, obviously frees more basis functions that can be dedicated to account for baseline fluctuations, so in practice researchers will usually have to find a good balancing act here. Papss will prompt a warning and cancel estimation, in case the problem becomes unidentifiable.
 
-
-## Recover spike weights using papss
+Finally, the aforementioned scaling parameter `f` of the pupil response function, introduced by Wierda et al. is generally not known. A good estimate can often be based on the rounded median pupil size across the entire data set plus the standard deviation, scaled by a factor of 0.1 and 0.01 respectively (the sum is then further scaled). Recovering the precise value is also not crucial, since the shape of the pattern will still be recovered, up to a difference in a scaling factor.
 
 With the aggregates and a range of possible pulse locations at hand we can now attempt to recover the subjects' demand trajectories. We set the `start_lambda` argument to 0.0 and `maxiter_outer` to 1 to ensure that the optimization goal is really just the standard non-negative least squares objective with $\hat{\mathbf{b}}$ being constrained to contain only elements larger or equal to zero. `model` is set to `"WIER_SHARED"` to tell the optimizer to add slope terms for each subject's average pupil dilation time-course as introduced by Wierda et al. (2012).
 
@@ -210,7 +210,7 @@ solvedPupil <- papss::pupil_solve(pulse_spacing = 1,
                            start_lambda = 0.0,
                            expand_by = 500,
                            pulse_dropping_factor = 3,
-                           f=(1/(10^round(median(aggr_dat$pupil)/10))))
+                           f=(1/(10^(round(median(aggr_dat$pupil)/10) + round(sd(aggr_dat$pupil)/100)))))
 
 recovered_coef <- solvedPupil$coef
 model_mat <- solvedPupil$modelmat
@@ -248,8 +248,8 @@ plot_sim_vs_recovered(n,
                       solvedPupil$pulsesInTime,
                       solvedPupil$expandedTime,
                       (500/20),
-                      (1/(10^round(median(aggr_dat$pupil)/10))),
-                      100)
+                      (1/(10^(round(median(aggr_dat$pupil)/10) + round(sd(aggr_dat$pupil)/100)))),
+                      1) # Scaling factor that potentially got lost through `f` estimate - here no loss.
 
 legend("topright",
        c("True trajectory","Unpenalized papss estimate"),
@@ -315,7 +315,7 @@ solvedPupil <- papss::pupil_solve(pulse_spacing = 1,
                            start_lambda = 0.1,
                            expand_by = 500,
                            pulse_dropping_factor = 3,
-                           f=(1/(10^round(median(aggr_dat$pupil)/10))))
+                           f=(1/(10^(round(median(aggr_dat$pupil)/10) + round(sd(aggr_dat$pupil)/100)))))
 
 recovered_coef <- solvedPupil$coef
 model_mat <- solvedPupil$modelmat
@@ -333,8 +333,8 @@ plot_sim_vs_recovered(n,
                       solvedPupil$pulsesInTime,
                       solvedPupil$expandedTime,
                       (500/20),
-                      (1/(10^round(median(aggr_dat$pupil)/10))),
-                      100)
+                      (1/(10^(round(median(aggr_dat$pupil)/10) + round(sd(aggr_dat$pupil)/100)))),
+                      1)
 
 legend("topright",
        c("True trajectory","Penalized papss estimate"),
