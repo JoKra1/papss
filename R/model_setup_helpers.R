@@ -192,6 +192,61 @@ WIER_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,subs,pulse
 }
 
 #' Creates trainings matrix and penalties for a fully penalized
+#' version of the original Wierda et al. (2012) model.
+#' Like by Wierda et al. separate sets of coefficients are estimated per
+#' subject with the h_basis terms. All those coefficients are again constrained
+#' to be non-negative. Model also includes the slope terms for each subject that
+#' Wierda et al. (2012) introduced. These are not constrained - since their
+#' primary purpose was to account for drift in the pupil averages of individual
+#' subjects.
+#' 
+#' This model differs from the one by Wierda et al. (2012) in that it penalizes
+#' the coefficients corresponding to the h_basis terms. Specifically, it
+#' enforces a single penalty term shared by all subjects (e.g., this is
+#' similar to the 'fs' basis in mgcv or can be achieved by using the 'id' keyword
+#' in a 'by' factor smooth.). The form of the penalty expressed on all of the
+#' basis functions is a simple identity matrix. We here also penalize all slope
+#' terms, again with a single penalty (this time applied to a single matrix though).
+#' 
+#' @param time A numeric vector containing positive time values in ms
+#' @param subs A factor vector containing subject identifiers
+#' @param pulse_locations A numeric vector containing index values of pulse loc.
+#' @param n Parameter defined by Hoeks & Levelt (number of laters)
+#' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
+#' @param f Parameter defined by Wierda et al. (scaling factor)
+WIER_IND_NNLS_model_setup <- function(expanded_time,expand_by,time,subs,pulse_locations,n,t_max,f) {
+  
+  # Extract number of subjects
+  n_subs <- length(unique(subs))
+  # Setup model matrix
+  slope <- create_slope_term(unique(time),n_subs)
+  spike_matrix <- create_spike_matrix_term(expanded_time,expand_by,time,pulse_locations,n,t_max,f)
+  slope_matrix <- term_by_factor(slope,subs)
+  spike_matrix_by <- term_by_factor(spike_matrix,subs)
+  
+  trainingsMatrix <- cbind(slope_matrix,spike_matrix_by)
+  
+  # Setup Penalty definition to be implemented by c++
+  # one individual slope penaltiy plus one
+  # shared penalty for all subjects (expressed on bases)
+  freq <- c(1, rep(1,length.out=n_subs))
+  # individual penalty is of size n_subs*n_subs. Also, Each of the shared
+  # penalties is of size length(pulse_locations)*length(pulse_locations)
+  size <- c(n_subs,rep(length(pulse_locations),length.out=n_subs))
+  
+  
+  # Define positive constraints
+  constraints <- rep("c",ncol(trainingsMatrix))
+  constraints[1:n_subs] <- "u" # All parametric terms are unconstrained
+  
+  return(list("X"=trainingsMatrix,
+              "Penalties"=list("freq"=freq,
+                               "size"=size,
+                               "startIndex"=0),
+              "constraints"=constraints))
+}
+
+#' Creates trainings matrix and penalties for a fully penalized
 #' model inspired by the one used by Denison et al., (2020).
 #' Like by Wierda et al. (2012) separate sets of coefficients are estimated per
 #' subject with the h_basis terms. All those coefficients are again constrained
@@ -333,10 +388,14 @@ pupil_solve <- function(pulse_spacing,
   
   # Expand time for pulses that happened before the the time-window
   # that is considered.
-  time_expansion <- seq(0,(expand_by - sample_length), by = sample_length)
-  expanded_time <- rep(c(time_expansion,
-                         (unique(data$time) + expand_by)),
-                       times=length(unique(data$subject)))
+  expanded_time <- data$time
+  
+  if(expand_by > 0){
+    time_expansion <- seq(0,(expand_by - sample_length), by = sample_length)
+    expanded_time <- rep(c(time_expansion,
+                           (unique(data$time) + expand_by)),
+                         times=length(unique(data$subject)))
+  }
   
   # Create pulse location vector
   last_pulse <- length(unique(expanded_time)) - (pulse_dropping_factor * round(t_max/100)) - 1
@@ -351,6 +410,13 @@ pupil_solve <- function(pulse_spacing,
                                           data$time,data$subject,
                                           pulse_locations,
                                           n,t_max,f)
+  } else if (model == "WIER_IND") {
+    # Wierda et al. (2012) model, but with individual penalties!
+    setup <- WIER_IND_NNLS_model_setup(expanded_time,
+                                      (expand_by/sample_length),
+                                      data$time,data$subject,
+                                      pulse_locations,
+                                      n,t_max,f)
   } else if (model == "DEN_SHARED") {
     # Denison et al. (2012) model, but with shared penalty!
     setup <- DEN_SHARED_NNLS_model_setup(expanded_time,
