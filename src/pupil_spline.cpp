@@ -189,6 +189,7 @@ void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::Mat
 
     // Now calculate the lambda update for this term.
     lambda = sigma * num / denom(0, 0) * lambda;
+    Rcpp::Rcout << lambda << "\n";
 }
 
 // ##################################### Functions #####################################
@@ -228,6 +229,7 @@ void enforceConstraints(Eigen::VectorXd &cf, const Rcpp::StringVector &constrain
 // adapted to solve a penalized NNLS instead of a simple NNLS. The gradient of the
 // penalized least squares loss function is from Wood (2017).
 void agdTOptimize(Eigen::VectorXd &cf,
+                  Eigen::MatrixXd &H,
                   std::vector<Eigen::VectorXd> &cfHistory,
                   const Eigen::MatrixXd &R,
                   const Eigen::VectorXd &f,
@@ -261,15 +263,31 @@ void agdTOptimize(Eigen::VectorXd &cf,
 
     // Error increase check.
     double prevErr = std::numeric_limits<double>::max();
+    
+    // Gradient history
+    Eigen::VectorXd prevGrad  = Eigen::VectorXd::Zero(R.cols());
 
     for (int i = 0; i < maxiter; ++i)
     {
 
+        // Calculate gradient
+        Eigen::VectorXd grad = (Q * ycf) - p;
+        
+        
         // Take a gradient step.
-        cf = ycf - (lr * ((Q * ycf) - p));
-
+        cf = ycf - (lr * grad);
+        
         // Enforce constraints.
         enforceConstraints(cf, constraints);
+        
+        // BFGS Hessian aproximation
+        // Taken from: http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.77.1058&rep=rep1&type=pdf
+        if(i > 0){
+            Eigen::VectorXd w = grad - prevGrad;
+            Eigen::VectorXd u = cf - prevCf;
+            Eigen::MatrixXd Hnext = H - ((H * u * u.transpose() * H) / (u.transpose() * H * u)) + ((w * w.transpose()) / (u.transpose() * w));
+            H = Hnext;
+        }
 
         // Calculate momentum update based on alpha coefficient discussed
         // in Sutskever et al. (2013)
@@ -313,6 +331,8 @@ void agdTOptimize(Eigen::VectorXd &cf,
         prevCf = cf;
 
         prevErr = errDot;
+        
+        prevGrad = grad;
     }
 }
 
@@ -381,6 +401,9 @@ int solveAM(Eigen::VectorXd &cf,
 
     // Error increase check.
     double prevErr = std::numeric_limits<double>::max();
+    
+    // Placeholder for Hessian aproximation
+    Eigen::MatrixXd H = Eigen::MatrixXd::Identity(colsX,colsX);
 
     // Now iteratively optimize cf and then the smoothness penalties.
     for (int i = 0; i < maxIter; ++i)
@@ -398,9 +421,10 @@ int solveAM(Eigen::VectorXd &cf,
 
         // Optimize for cf given current lambda values.
         agdTOptimize(cf,
+                     H,
                      cfHistory,
-                     R,
-                     f,
+                     X,
+                     y,
                      embS,
                      constraints,
                      r,
@@ -410,8 +434,8 @@ int solveAM(Eigen::VectorXd &cf,
 
         // Now we calculate the current error term to check whether we can terminate
         // or whether lambda should still be optimized.
-        Eigen::VectorXd res = f - R * cf;
-        double errDot = res.dot(res) + r;
+        Eigen::VectorXd res = y - X * cf;
+        double errDot = res.dot(res);
 
         // Crude convergence control
         double absErrDiff = errDot > prevErr ? errDot - prevErr : prevErr - errDot;
@@ -419,7 +443,7 @@ int solveAM(Eigen::VectorXd &cf,
 
         if (absErrDiff < tol)
         {
-            convCode = 0;
+            convCode = i;
             break;
         }
 
@@ -481,8 +505,8 @@ int solveAM(Eigen::VectorXd &cf,
         // Now we can calculate the actual inverse, not the root, of the term above.
         // After consulting Wood (2017) again I decided to apply the pivoting
         // here, because then the remaining code can be used as is.
-        Eigen::MatrixXd Inv = P2 * rInv * rInv.transpose() * P2.transpose();
-
+        // Eigen::MatrixXd Inv = P2 * rInv * rInv.transpose() * P2.transpose();
+        Eigen::MatrixXd Inv = (H + embS).inverse();
         // We also need the pseudo inverse of embS for the EFS update.
         // See: https://eigen.tuxfamily.org/dox/classEigen_1_1CompleteOrthogonalDecomposition.html
         Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> ginvDecomp(embS);
@@ -493,7 +517,7 @@ int solveAM(Eigen::VectorXd &cf,
         // double r2 = y.dot(y) - f2.dot(f2);
 
         // Finally we need to calculate the current estimate of sigma^2.
-        sigma = errDot / (rowsX - (Inv * R.transpose() * R).trace());
+        sigma = errDot / (rowsX - (Inv * H).trace());
         // Rcpp::Rcout << sigma << "\n";
 
         // Now we can update all lamda terms.
