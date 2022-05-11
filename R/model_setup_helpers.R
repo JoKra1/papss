@@ -461,5 +461,92 @@ pupil_solve <- function(pulse_spacing,
               "expandedTime" = expanded_time,
               "pulseLocations" = pulse_locations,
               "realLocations" = real_locations,
-              "pulsesInTime"= pulse_locations[real_locations >= 0]))
+              "pulsesInTime"= real_locations >= 0,
+              "setup"=setup,
+              "resid"= y - setup$X %*% solved_pup$coefficients,
+              "fitted"= setup$X %*% solved_pup$coefficients))
+}
+
+#' Bootstrap estimate of the standard error in the pulse weights. Calculation
+#' is based on the "bootstrapping residuals" approach presented in chapter 9
+#' of "An introduction to the Bootstrap" by Efron & Tribshirani. Algorithm 6.1
+#' for calculating standard error estimates based on bootstrap samples
+#' from chapter 6 is used for the actual calculations.
+#' @export
+bootstrap_papss_standard_error <- function(cf,
+                                           pupil_var,
+                                           setup,
+                                           warm_start=T,
+                                           N=100,n=10.1,
+                                           t_max=930,f=1/(10^24),
+                                           maxiter_inner=10000,
+                                           maxiter_outer=25,
+                                           convergence_tol=1e-08,
+                                           start_lambda=0.1) {
+  
+  # Get pupil into required format
+  y <- matrix(nrow = length(pupil_var),ncol=1)
+  y[,1] <- pupil_var
+  
+  # Get prediction
+  pred <- setup$X %*% cf
+  
+  # Calculate residual vector
+  resid <- y - pred
+  
+  # Get N * length(time_var) bootstrap samples from residual vector
+  resid_b <- sample(resid,size=(N * length(resid)),replace = T)
+  
+  # Prepare bootstrap sets
+  R_b <- matrix(resid_b,nrow = N,ncol = length(resid))
+  
+  # Prepare storage for bootstrap parameter estimates
+  B_b <- matrix(0,nrow=N,ncol=length(cf)) # individual samples
+  B_b_m <- rep(0,length.out=length(cf)) # bootstrap mean
+  
+  for (b_iter in 1:N) {
+    
+    # Prepare y*
+    y_star <- pred + R_b[b_iter,]
+    
+    # Re-use coefficients as starting values or estimate from scratch
+    init_cf <- cf
+    
+    if(!warm_start){
+      init_cf <- matrix(nrow=ncol(setup$X),ncol=1)
+      init_cf[,1] <- runif(n=ncol(setup$X))
+    }
+    
+    # Solve sample
+    solved_pup <- wrapAmSolve(setup$X,y_star,init_cf,setup$constraints,
+                              setup$Penalties$freq,setup$Penalties$size,
+                              setup$Penalties$startIndex,maxiter_outer,
+                              maxiter_inner,convergence_tol,
+                              F,start_lambda)
+    
+    # Update estimated parameters
+    B_b[b_iter,] <- solved_pup$coefficients
+    B_b_m <- B_b_m + solved_pup$coefficients
+  }
+  
+  # Finalize bootstrap mean
+  B_b_m <- B_b_m/N
+  
+  # Subtract mean row-wise from bootstrap parameters
+  # See: https://stackoverflow.com/questions/24520720/
+  # subtract-a-constant-vector-from-each-row-in-a-matrix-in-r
+  B_b_diff <- sweep(B_b,2,B_b_m)
+  
+  # Square all differences
+  B_b_diff_pow <- B_b_diff**2
+  
+  # Calculate col sum
+  B_b_sum <- colSums(B_b_diff_pow)
+  
+  # Divide by N-1 and calculate root to get standard error
+  B_b_se <- sqrt(B_b_sum/(N-1))
+  
+  return(list("standardError"=B_b_se,
+              "mean"=B_b_m,
+              "individualParams"=B_b))
 }

@@ -289,7 +289,9 @@ plot_sim_vs_recovered <- function(n_sub,
                                   expanded_time,
                                   expanded_by,
                                   f_est=1/(10^24),
-                                  scaling_factor=1){
+                                  scaling_factor=1,
+                                  se=NULL,
+                                  plot_avg=T){
 
   # First re-create model matrix, assuming Wierda et al. (2012) like setup.
   slopePredX <- papss::create_slope_term(unique(aggr_dat$time),1)
@@ -316,6 +318,10 @@ plot_sim_vs_recovered <- function(n_sub,
     
     # Get corresponding spline spike weights
     splineCoefSub <- recovered_coef[((n_sub + 1) + ((i - 1) * ncol(semiPredX))):(n_sub+(i * ncol(semiPredX)))]
+    
+    if(!is.null(se)){
+      standardErrorSub <- se[((n_sub + 1) + ((i - 1) * ncol(semiPredX))):(n_sub+(i * ncol(semiPredX)))]
+    }
     
     # combine all subj. coefficients
     allCoefSub <- c(slopes[i],splineCoefSub)
@@ -354,16 +360,35 @@ plot_sim_vs_recovered <- function(n_sub,
          xlab = "time",
          ylab="Spike strength",lwd=3)
     lines(unique(aggr_dat$time),est_peaks_plot,col="red",lwd=3)
+    
+    if(!is.null(se)){
+      lower_se <- est_peaks_plot
+      upper_se <- est_peaks_plot
+      
+      lower_se[unique(aggr_dat$time) %in%
+          real_locations[pulses_in_time]] <- lower_se[unique(aggr_dat$time) %in%
+                                                        real_locations[pulses_in_time]] - standardErrorSub[pulses_in_time]
+      
+      upper_se[unique(aggr_dat$time) %in%
+                 real_locations[pulses_in_time]] <- upper_se[unique(aggr_dat$time) %in%
+                                                               real_locations[pulses_in_time]] + standardErrorSub[pulses_in_time]
+      
+      lines(unique(aggr_dat$time),lower_se,col="red",lwd=2,lty=2)
+      lines(unique(aggr_dat$time),upper_se,col="red",lwd=2,lty=2)
+    }
+    
+    
   }
   par(mfrow=c(1,1))
   # Calculate average to approximate population estimate
   pop_spike_est <- pop_spike_est/n_sub
-  
-  # Now plot population estimate
-  plot(unique(aggr_dat$time),sim_obj$pop_truth_demand,type="l",
-       ylim = c(0,1.5),
-       main = "Population level",
-       xlab = "time",
-       ylab="Spike strength",lwd=3)
-  lines(unique(aggr_dat$time),pop_spike_est,col="red",lwd=3)
+  if(plot_avg){
+    # Now plot population estimate
+    plot(unique(aggr_dat$time),sim_obj$pop_truth_demand,type="l",
+         ylim = c(0,1.5),
+         main = "Population level",
+         xlab = "time",
+         ylab="Spike strength",lwd=3)
+    lines(unique(aggr_dat$time),pop_spike_est,col="red",lwd=3)
+  }
 }

@@ -343,6 +343,70 @@ legend("topright",
        lty=1)
 ```
 
+## Parameter confidence
+
+While we can successfully apply the original lambda update from Wood & Fasiolo (2017)
+to the NNLS estimation here, we cannot create confidence estimates based on their
+suggestions. This is easily explained by considering that the parameter estimates
+recovered here will never have support for values smaller than zero. Thus, the
+usual assumption that parameter estimates are normally distributed **cannot** be
+applied in this case. To still get an estimate of parameter confidence we can rely on bootstrapping
+(Efron & Tibshirani, 1993). ``papss`` supports residual replacing only. As discussed by
+Efron & Tibshirani, this requires evaluating the residuals generated for our data
+carefully:
+
+```{r}
+plot(solvedPupil$fitted,
+     solvedPupil$resid,
+     xlab="Fitted values",
+     ylab = "Residuals")
+abline(h=0,lty=2)
+
+acf(solvedPupil$resid,
+    main="Auto-correlation in residuals")
+```
+
+The residuals should show approximately constant variance and low correlation
+across different lags (Efron & Tibshirani, 1993). Only then are the confidence
+estimates, recovered below, to be trusted.
+
+```{r}
+# Perform bootstrap estimation.
+bootstrap <- papss::bootstrap_papss_standard_error(solvedPupil$coef,
+                                                   aggr_dat$pupil,
+                                                   solvedPupil$setup,
+                                                   N=25, # This should be higher in practice!
+                                                   maxiter_inner = 100000,
+                                                   maxiter_outer = 10,
+                                                   f=(1/(10^(round(median(aggr_dat$pupil)/10) +
+                                                             round(sd(aggr_dat$pupil)/100)))))
+```
+
+We can now visualize the individual demand trajectories with an estimate of the
+uncertainty surrounding them.
+
+```{r}
+plot_sim_vs_recovered(n,
+                      aggr_dat,
+                      sim_obj,
+                      recovered_coef,
+                      solvedPupil$pulseLocations,
+                      solvedPupil$realLocations,
+                      solvedPupil$pulsesInTime,
+                      solvedPupil$expandedTime,
+                      (500/20),
+                      (1/(10^(round(median(aggr_dat$pupil)/10) + round(sd(aggr_dat$pupil)/100)))),
+                      1,
+                      se=bootstrap$standardError,
+                      plot_avg=F)
+
+legend("topright",
+       c("True trajectory","Penalized papss estimate"),
+       col=c("black","red"),
+       lwd=3,
+       lty=1)
+```
+
 ## Final remarks
 
 `papss` offers multiple model setups, not just one inspired by Wierda et al.'s setup (i.e., with extra slope terms). Dension et al. (2020) for example included intercept terms for each subject, and setting `model="DEN_SHARED"` will  similarly estimate intercept terms instead of slope terms, while setting `model=WIER_DEN_SHARED` will estimate both intercept and slope terms for each subject.
