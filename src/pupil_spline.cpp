@@ -194,11 +194,17 @@ void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::Mat
 
 // ##################################### Functions #####################################
 
-// Enforces positivity constraints on a vector. Based on the work by Hoeks & Levelt (1993)
+// Enforces positivity constraints on the coefficient vector. Based on the work by Hoeks & Levelt (1993)
 // we require all 'attention spikes', i.e., the weights in our cf vector to be positive.
 // Thus, we unfortunately cannot rely on a closed solution for our optimization problem but have to
 // resort to perform projected gradient optimization, as discussed by Ang (2020a; 2020b)
-void enforceConstraints(Eigen::VectorXd &cf, const Rcpp::StringVector &constraints)
+// Additionally sets the difference in gradient elements to zero that are
+// constrained in this step, so that the optional Hessian update is only based on
+// information from parameters that are currently part of the demand
+// solution (i.e., spikes >= 0 that were not completely penalized away).
+void enforceConstraints(Eigen::VectorXd &cf,
+                        Eigen::VectorXd &gradDiff,
+                        const Rcpp::StringVector &constraints)
 {
 
     for (int idx = 0; idx < constraints.size(); ++idx)
@@ -211,6 +217,7 @@ void enforceConstraints(Eigen::VectorXd &cf, const Rcpp::StringVector &constrain
             if (cf(idx) < 0)
             {
                 cf(idx) = 0;
+                gradDiff(idx) = 0;
             }
         }
     }
@@ -278,14 +285,15 @@ void agdTOptimize(Eigen::VectorXd &cf,
         cf = ycf - (lr * grad);
         
         // Enforce constraints.
-        enforceConstraints(cf, constraints);
+        Eigen::VectorXd w = grad - prevGrad;
+        enforceConstraints(cf,w, constraints);
         
-        // BFGS Hessian aproximation
-        // Taken from: http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.77.1058&rep=rep1&type=pdf
+        // BFGS Hessian aproximation using projected gradient!
+        // Originally taken from: http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.77.1058&rep=rep1&type=pdf
+        // Corrected for original notation in: Practical Methods of Optimization
         if(i > 0){
-            Eigen::VectorXd w = grad - prevGrad;
             Eigen::VectorXd u = cf - prevCf;
-            Eigen::MatrixXd Hnext = H - ((H * u * u.transpose() * H) / (u.transpose() * H * u)) + ((w * w.transpose()) / (u.transpose() * w));
+            Eigen::MatrixXd Hnext = H - ((H * u * u.transpose() * H) / (u.transpose() * H * u)) + ((w * w.transpose()) / (w.transpose() * u));
             H = Hnext;
         }
 
