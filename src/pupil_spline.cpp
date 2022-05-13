@@ -167,13 +167,7 @@ void LambdaTerm::embeddInS(Eigen::MatrixXd &embS, int &cIndex, bool shouldParame
 }
 
 // Perform a generalized Fellner Schall update step for a lambda term. This update rule is
-// discussed in Wood & Fasiolo (2017). In the paper, the authors provide the update in terms
-// of X and y (as well as X and z for generalized models). However, as discussed in Wood (2017)
-// and Wood (2011): the explicit calculation of (X' * X + embS)^-1 is undesirable.
-// Thus we here invoke the update on 'updated terms' (see code below for a quick overview
-// and Wood, 2011; Wood, 2017 for more details) obtained after repeated QR factorization
-// and Cholesky decomposition, as described extensively in Wood (2011, 2017) to improve on
-// the ill-conditioned nature of the former term.
+// discussed in Wood & Fasiolo (2017).
 void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::MatrixXd &cf, const Eigen::MatrixXd &inv,
                                    const Eigen::MatrixXd &gInv, int &cIndex, double sigma)
 {
@@ -238,26 +232,28 @@ void enforceConstraints(Eigen::VectorXd &cf,
 void agdTOptimize(Eigen::VectorXd &cf,
                   Eigen::MatrixXd &H,
                   std::vector<Eigen::VectorXd> &cfHistory,
-                  const Eigen::MatrixXd &R,
+                  const Eigen::SparseMatrix<double> &R,
                   const Eigen::VectorXd &f,
                   const Eigen::MatrixXd &embS,
                   const Rcpp::StringVector &constraints,
-                  double r,
                   int maxiter,
                   double tol,
                   bool shouldCollectProgress)
 {
     // Notation follows the one by Ang (2020).
-    Eigen::MatrixXd Rt = R.transpose();
-    Eigen::MatrixXd Q = Rt * R;
+    Eigen::SparseMatrix<double> Rt = R.transpose();
+    Eigen::SparseMatrix<double> Q = Rt * R;
     Eigen::MatrixXd p = Rt * f;
 
+    // Sparse embS
+    Eigen::SparseMatrix<double> sEmbS = embS.sparseView();
+
     // Pre-calculate learning rate.
-    Eigen::MatrixXd QQ = Q.array().pow(2); // Element wise Q_i**2 calculation
+    Eigen::SparseMatrix<double> QQ = (Q.cwiseProduct(Q)).eval(); // Element wise Q_i**2 calculation
     double lr = 1 / sqrt(QQ.sum());
 
     // Add Penalty to R term.
-    Q += embS;
+    Q += sEmbS;
 
     // Calculate momentum related coefficients.
     Eigen::VectorXd ycf0 = Eigen::VectorXd(cf);
@@ -349,7 +345,7 @@ int solveAM(Eigen::VectorXd &cf,
             double &sigma,
             std::vector<double> &finalLambdas,
             std::vector<Eigen::VectorXd> &cfHistory,
-            const Eigen::MatrixXd &X,
+            const Eigen::SparseMatrix<double> &X,
             const Eigen::VectorXd &y,
             const Rcpp::StringVector &constraints,
             const Rcpp::IntegerVector &lambdaTermFreq,
@@ -367,30 +363,6 @@ int solveAM(Eigen::VectorXd &cf,
     // Get dimension of X for re-use later.
     int rowsX = X.rows();
     int colsX = X.cols();
-
-    // First compute QR decomposition of X.
-    Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr(X);
-    Eigen::MatrixXd R = qr.matrixR().template triangularView<Eigen::Upper>();
-
-    // We do not need the zero rows in R (i.e., we care only about the "reduced/thin" QR decomposition).
-    // Below, Eigen is forced to place the block in a temporary variable before assigning it to R.
-    // See: http://eigen.tuxfamily.org/dox/TopicLazyEvaluation.html
-    // See: https://stackoverflow.com/questions/30145771/shrink-matrix-with-eigen-using-block-in-assignment
-    R = R.block(0, 0, colsX, colsX).eval();
-
-    // We also do not need the full Q.
-    // See: https://forum.kde.org/viewtopic.php?f=74&t=91271
-    Eigen::MatrixXd Q = qr.householderQ().setLength(qr.nonzeroPivots()) * Eigen::MatrixXd::Identity(rowsX, colsX);
-
-    // Extract permutation matrix applied by Householder QR decomp and apply it to R.
-    // See: https://eigen.tuxfamily.org/dox/classEigen_1_1ColPivHouseholderQR.html
-    // See: https://en.wikipedia.org/wiki/QR_decomposition#Column_pivoting
-    Eigen::MatrixXd P = qr.colsPermutation();
-    R *= P.transpose();
-
-    // Now calculate f and r terms from Wood (2017)
-    Eigen::VectorXd f = Q.transpose() * y;
-    double r = y.dot(y) - f.dot(f);
 
     // Prepare lambda terms.
     std::vector<std::unique_ptr<LambdaTerm>> lambdaContainer;
@@ -435,7 +407,6 @@ int solveAM(Eigen::VectorXd &cf,
                      y,
                      embS,
                      constraints,
-                     r,
                      maxIterOptim,
                      tol,
                      shouldCollectProgress);
@@ -459,70 +430,20 @@ int solveAM(Eigen::VectorXd &cf,
         if (maxIter == 1)
             break;
 
-        // Now calculate the next step in the stable LS approach:
-        // QR decomposition based on R + Cholesky factor of embS.
-
-        // First the Cholesky factor using LDL' decomposition:
+        // Compute inverse of H + embS using Cholesky decomposition as
+        // recommended by Wood & Fasiolo (2017).
+        // First form the Cholesky decomposition using LDL' decomposition:
         // See: https://eigen.tuxfamily.org/dox/classEigen_1_1LDLT.html
-        Eigen::LDLT<Eigen::MatrixXd> ldlt(embS);
+        Eigen::LDLT<Eigen::MatrixXd> ldlt(H + embS);
+        
+        // Then compute the inverse
+        // See: https://github.com/kaskr/adcomp/issues/74
+        Eigen::MatrixXd Inv = ldlt.solve(Eigen::MatrixXd::Identity(colsX,colsX));
 
-        // Now get the un-pivoted "Cholesky" factor of embS
-        // Notation follows: https://services.math.duke.edu/~jdr/2021f-218/materials/week11.pdf
-        // Start with un-pivoting the lower triangular matrix L.
-        Eigen::MatrixXd L = ldlt.matrixL();
-        Eigen::MatrixXd PL = ldlt.transpositionsP().transpose() * L;
-
-        // The .abs() is a cheat here so that the root does not fail.
-        // This is necessary since if embS is not positive semidefinite
-        // D will contain very small negative elements.
-        Eigen::VectorXd D = ldlt.vectorD().array().abs().sqrt();
-
-        // Final factor
-        Eigen::MatrixXd L1 = PL * D.asDiagonal();
-
-        // Concatenate R and L1
-        // See: https://stackoverflow.com/questions/21496157/eigen-how-to-concatenate-matrix-along-a-specific-dimension
-        Eigen::MatrixXd RL1(colsX + L1.cols(), colsX);
-        RL1 << R, L1.transpose();
-
-        // Now form the next QR decomposition (See above).
-        Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr2(RL1);
-        Eigen::MatrixXd R2 = qr2.matrixR().template triangularView<Eigen::Upper>();
-
-        // Extract relevant part again.
-        R2 = R2.block(0, 0, colsX, colsX).eval();
-
-        // In case the diagonal contains zero elements terminate nicely.
-        if (!(R2.diagonal().array().abs().matrix().minCoeff() > 0.0))
-        {
-            convCode = -2;
-            Rcpp::Rcerr << "Problem with calculating inverse for R2. Is the problem identifiable?\n";
-            break;
-        }
-
-        // Extract permutation matrix but do not reverse pivot on R2!
-        Eigen::MatrixXd P2 = qr2.colsPermutation();
-
-        // Q here needs an additional update that was not necessary in the first step.
-        Eigen::MatrixXd Q2 = qr2.householderQ().setLength(qr2.nonzeroPivots()) * Eigen::MatrixXd::Identity(RL1.rows(), colsX);
-        Q2 = Q * Q2.block(0, 0, colsX, colsX).eval();
-
-        // Now form the inverse of R2 (which is really the root of the inverse of X' %*% X + embS - see Wood (2017))
-        Eigen::MatrixXd rInv = R2.inverse();
-
-        // Now we can calculate the actual inverse, not the root, of the term above.
-        // After consulting Wood (2017) again I decided to apply the pivoting
-        // here, because then the remaining code can be used as is.
-        // Eigen::MatrixXd Inv = P2 * rInv * rInv.transpose() * P2.transpose();
-        Eigen::MatrixXd Inv = (H + embS).inverse();
         // We also need the pseudo inverse of embS for the EFS update.
         // See: https://eigen.tuxfamily.org/dox/classEigen_1_1CompleteOrthogonalDecomposition.html
         Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> ginvDecomp(embS);
         Eigen::MatrixXd gInv = ginvDecomp.pseudoInverse();
-
-        // f and r also need to be recomputed.
-        // Eigen::VectorXd f2 = Q2.transpose() * y;
-        // double r2 = y.dot(y) - f2.dot(f2);
 
         // Finally we need to calculate the current estimate of sigma^2.
         sigma = errDot / (rowsX - (Inv * H).trace());
@@ -571,12 +492,16 @@ Rcpp::List wrapAmSolve(const Eigen::Map<Eigen::MatrixXd> X,
     std::vector<double> finalLambdas;
     std::vector<Eigen::VectorXd> cfHistory;
 
+    // Get a sparse representation of X (should really be done in R already...)
+    Eigen::SparseMatrix<double> XS;
+    XS = X.sparseView(0.01,1); 
+
     // Solve the additive model
     int convCode = solveAM(cf,
                            sigma,
                            finalLambdas,
                            cfHistory,
-                           X,
+                           XS,
                            y,
                            constraints,
                            lambdaTermFreq,
