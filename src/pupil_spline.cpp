@@ -183,7 +183,6 @@ void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::Mat
 
     // Now calculate the lambda update for this term.
     lambda = sigma * num / denom(0, 0) * lambda;
-    Rcpp::Rcout << lambda << "\n";
 }
 
 // ##################################### Functions #####################################
@@ -193,7 +192,7 @@ void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::Mat
 // Thus, we unfortunately cannot rely on a closed solution for our optimization problem but have to
 // resort to perform projected gradient optimization, as discussed by Ang (2020a; 2020b)
 // Additionally sets the difference in gradient elements to zero that are
-// constrained in this step, so that the optional Hessian update is only based on
+// constrained in this step, so that the optional Hessian update (see agdTOptimize()) is only based on
 // information from parameters that are currently part of the demand
 // solution (i.e., spikes >= 0 that were not completely penalized away).
 void enforceConstraints(Eigen::VectorXd &cf,
@@ -229,31 +228,41 @@ void enforceConstraints(Eigen::VectorXd &cf,
 // pseudo-code from the slides in the lecture series by Ang (2020) and has been
 // adapted to solve a penalized NNLS instead of a simple NNLS. The gradient of the
 // penalized least squares loss function is from Wood (2017).
+//
+// Optionally accumulates an estimate of the Hessian matrix, based on the
+// BFGS update (see: Practical Methods of Optimization). This option was made
+// available because X'*X/sigma is not necessarily representing the Hessian for
+// the penalized NNLS model (it is for a traditional penalized AM, see Wood, 2011).
+// Kim, D., Sra, S., & Dhillon, I. S. (2006) have previously relied on this update
+// in the context of NNLS, which inspired the use here. We make sure that the BFGS
+// update is only calculated on the current projected coefficient estimate (within
+// permitted parameter space) and that the difference in gradients is corrected for
+// this projection as well. In our own simulations this drastically improved the
+// convergence of the outer optimizer.
 void agdTOptimize(Eigen::VectorXd &cf,
                   Eigen::MatrixXd &H,
                   std::vector<Eigen::VectorXd> &cfHistory,
-                  const Eigen::SparseMatrix<double> &R,
+                  const Eigen::MatrixXd &R,
                   const Eigen::VectorXd &f,
                   const Eigen::MatrixXd &embS,
                   const Rcpp::StringVector &constraints,
                   int maxiter,
                   double tol,
-                  bool shouldCollectProgress)
+                  bool shouldCollectProgress,
+                  bool shouldAccumulH)
 {
     // Notation follows the one by Ang (2020).
-    Eigen::SparseMatrix<double> Rt = R.transpose();
-    Eigen::SparseMatrix<double> Q = Rt * R;
+    Eigen::MatrixXd Rt = R.transpose();
+    Eigen::MatrixXd Q = Rt * R;
     Eigen::MatrixXd p = Rt * f;
 
-    // Sparse embS
-    Eigen::SparseMatrix<double> sEmbS = embS.sparseView();
 
     // Pre-calculate learning rate.
-    Eigen::SparseMatrix<double> QQ = (Q.cwiseProduct(Q)).eval(); // Element wise Q_i**2 calculation
+    Eigen::MatrixXd QQ = Q.array().pow(2); // Element wise Q_i**2 calculation
     double lr = 1 / sqrt(QQ.sum());
 
     // Add Penalty to R term.
-    Q += sEmbS;
+    Q += embS;
 
     // Calculate momentum related coefficients.
     Eigen::VectorXd ycf0 = Eigen::VectorXd(cf);
@@ -287,7 +296,7 @@ void agdTOptimize(Eigen::VectorXd &cf,
         // BFGS Hessian aproximation using projected gradient!
         // Originally taken from: http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.77.1058&rep=rep1&type=pdf
         // Corrected for original notation in: Practical Methods of Optimization
-        if(i > 0){
+        if(i > 0 && shouldAccumulH){
             Eigen::VectorXd u = cf - prevCf;
             Eigen::MatrixXd Hnext = H - ((H * u * u.transpose() * H) / (u.transpose() * H * u)) + ((w * w.transpose()) / (w.transpose() * u));
             H = Hnext;
@@ -340,12 +349,18 @@ void agdTOptimize(Eigen::VectorXd &cf,
     }
 }
 
-// Fits an additive model based on the stable LS solutions discussed in Wood (2011,2017).
+// Fits an additive model based on Cholesky decomposition, see Wood &
+// Fasiolo (2017). If shouldAccumulH=true, the BFGS update is used to
+// accumulate the Hessian iteratively. Otherwise, the correct least squares
+// term (X'* X, see Wood, 2011) is used! While this is incorrect given that
+// actually an NNLS problem is solved, but in practice this usually works just
+// as well - with the smooth penalties being usually a bit lower. This also
+// speeds up computation and should be used for big model matrices!
 int solveAM(Eigen::VectorXd &cf,
             double &sigma,
             std::vector<double> &finalLambdas,
             std::vector<Eigen::VectorXd> &cfHistory,
-            const Eigen::SparseMatrix<double> &X,
+            const Eigen::MatrixXd &X,
             const Eigen::VectorXd &y,
             const Rcpp::StringVector &constraints,
             const Rcpp::IntegerVector &lambdaTermFreq,
@@ -355,7 +370,8 @@ int solveAM(Eigen::VectorXd &cf,
             int maxIter,
             int maxIterOptim,
             double tol,
-            bool shouldCollectProgress)
+            bool shouldCollectProgress,
+            bool shouldAccumulH)
 {
     // Set convergence code
     int convCode = -1;
@@ -363,6 +379,9 @@ int solveAM(Eigen::VectorXd &cf,
     // Get dimension of X for re-use later.
     int rowsX = X.rows();
     int colsX = X.cols();
+    
+    // Set inverse target (for later Cholesky solver)
+    Eigen::MatrixXd invTarget = Eigen::MatrixXd::Identity(colsX,colsX);
 
     // Prepare lambda terms.
     std::vector<std::unique_ptr<LambdaTerm>> lambdaContainer;
@@ -382,9 +401,13 @@ int solveAM(Eigen::VectorXd &cf,
     // Error increase check.
     double prevErr = std::numeric_limits<double>::max();
     
-    // Placeholder for Hessian aproximation
-    Eigen::MatrixXd H = Eigen::MatrixXd::Identity(colsX,colsX);
-
+    // Placeholder for Hessian term
+    Eigen::MatrixXd H = Eigen::MatrixXd::Identity(colsX,colsX); // BFGS aprox.
+    
+    if(!shouldAccumulH) {
+      H = X.transpose() * X; // Least squares aprox.
+    }
+    
     // Now iteratively optimize cf and then the smoothness penalties.
     for (int i = 0; i < maxIter; ++i)
     {
@@ -409,7 +432,8 @@ int solveAM(Eigen::VectorXd &cf,
                      constraints,
                      maxIterOptim,
                      tol,
-                     shouldCollectProgress);
+                     shouldCollectProgress,
+                     shouldAccumulH);
 
         // Now we calculate the current error term to check whether we can terminate
         // or whether lambda should still be optimized.
@@ -438,7 +462,7 @@ int solveAM(Eigen::VectorXd &cf,
         
         // Then compute the inverse
         // See: https://github.com/kaskr/adcomp/issues/74
-        Eigen::MatrixXd Inv = ldlt.solve(Eigen::MatrixXd::Identity(colsX,colsX));
+        Eigen::MatrixXd Inv = ldlt.solve(invTarget);
 
         // We also need the pseudo inverse of embS for the EFS update.
         // See: https://eigen.tuxfamily.org/dox/classEigen_1_1CompleteOrthogonalDecomposition.html
@@ -482,7 +506,8 @@ Rcpp::List wrapAmSolve(const Eigen::Map<Eigen::MatrixXd> X,
                        int maxIterOptim,
                        double tol = 0.001,
                        bool shouldCollectProgress = false,
-                       double startLambda = 0.1)
+                       double startLambda = 0.1,
+                       bool shouldAccumulH = true)
 {
     // Create a set of coefficients, will be passed down and updated by solveAM
     Eigen::VectorXd cf = Eigen::VectorXd(initCf);
@@ -492,16 +517,13 @@ Rcpp::List wrapAmSolve(const Eigen::Map<Eigen::MatrixXd> X,
     std::vector<double> finalLambdas;
     std::vector<Eigen::VectorXd> cfHistory;
 
-    // Get a sparse representation of X (should really be done in R already...)
-    Eigen::SparseMatrix<double> XS;
-    XS = X.sparseView(0.01,1); 
 
     // Solve the additive model
     int convCode = solveAM(cf,
                            sigma,
                            finalLambdas,
                            cfHistory,
-                           XS,
+                           X,
                            y,
                            constraints,
                            lambdaTermFreq,
@@ -511,7 +533,8 @@ Rcpp::List wrapAmSolve(const Eigen::Map<Eigen::MatrixXd> X,
                            maxIter,
                            maxIterOptim,
                            tol,
-                           shouldCollectProgress);
+                           shouldCollectProgress,
+                           shouldAccumulH);
 
     // Convert cfHistory into something that can more easily be passed to R
     Eigen::MatrixXd cfHistMat = Eigen::MatrixXd::Zero(1, 1);

@@ -377,6 +377,7 @@ pupil_solve <- function(pulse_spacing,
                         convergence_tol=1e-08,
                         should_collect_progress=F,
                         start_lambda=0.1,
+                        should_accum_H=T,
                         init_cf = NULL,
                         expand_by = 800,
                         sample_length = 20) {
@@ -450,7 +451,8 @@ pupil_solve <- function(pulse_spacing,
                             setup$Penalties$freq,setup$Penalties$size,
                             setup$Penalties$startIndex,maxiter_outer,
                             maxiter_inner,convergence_tol,
-                            should_collect_progress,start_lambda)
+                            should_collect_progress,start_lambda,
+                            should_accum_H)
   
   return(list("coef" = solved_pup$coefficients,
               "modelmat" = setup$X,
@@ -482,7 +484,8 @@ bootstrap_papss_standard_error <- function(cf,
                                            maxiter_inner=10000,
                                            maxiter_outer=25,
                                            convergence_tol=1e-08,
-                                           start_lambda=0.1) {
+                                           start_lambda=0.1,
+                                           should_accum_H=T) {
   
   # Get pupil into required format
   y <- matrix(nrow = length(pupil_var),ncol=1)
@@ -522,7 +525,7 @@ bootstrap_papss_standard_error <- function(cf,
                               setup$Penalties$freq,setup$Penalties$size,
                               setup$Penalties$startIndex,maxiter_outer,
                               maxiter_inner,convergence_tol,
-                              F,start_lambda)
+                              F,start_lambda,should_accum_H)
     
     # Update estimated parameters
     B_b[b_iter,] <- solved_pup$coefficients
