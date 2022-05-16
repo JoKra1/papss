@@ -154,35 +154,35 @@ term_by_factor <- function(term,fact) {
 #' terms, again with a single penalty (this time applied to a single matrix though).
 #' 
 #' @param time A numeric vector containing positive time values in ms
-#' @param subs A factor vector containing subject identifiers
+#' @param fact A factor vector containing factor level identifiers
 #' @param pulse_locations A numeric vector containing index values of pulse loc.
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Parameter defined by Wierda et al. (scaling factor)
-WIER_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,subs,pulse_locations,n,t_max,f) {
+WIER_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse_locations,n,t_max,f) {
   
-  # Extract number of subjects
-  n_subs <- length(unique(subs))
+  # Extract number of factor levels
+  n_fact <- length(unique(fact))
   # Setup model matrix
-  slope <- create_slope_term(unique(time),n_subs)
+  slope <- create_slope_term(unique(time),n_fact)
   spike_matrix <- create_spike_matrix_term(expanded_time,expand_by,time,pulse_locations,n,t_max,f)
-  slope_matrix <- term_by_factor(slope,subs)
-  spike_matrix_by <- term_by_factor(spike_matrix,subs)
+  slope_matrix <- term_by_factor(slope,fact)
+  spike_matrix_by <- term_by_factor(spike_matrix,fact)
   
   trainingsMatrix <- cbind(slope_matrix,spike_matrix_by)
   
   # Setup Penalty definition to be implemented by c++
   # one individual slope penaltiy plus one
-  # shared penalty for all subjects (expressed on bases)
-  freq <- c(1, n_subs)
-  # individual penalty is of size n_subs*n_subs. Also, Each of the shared
+  # shared penalty for all factor levels (expressed on bases)
+  freq <- c(1, n_fact)
+  # individual penalty is of size n_fact*n_fact Also, Each of the shared
   # penalties is of size length(pulse_locations)*length(pulse_locations)
-  size <- c(n_subs,length(pulse_locations))
+  size <- c(n_fact,length(pulse_locations))
   
   
   # Define positive constraints
   constraints <- rep("c",ncol(trainingsMatrix))
-  constraints[1:n_subs] <- "u" # All parametric terms are unconstrained
+  constraints[1:n_fact] <- "u" # All parametric terms are unconstrained
   
   return(list("X"=trainingsMatrix,
               "Penalties"=list("freq"=freq,
@@ -209,35 +209,35 @@ WIER_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,subs,pulse
 #' terms, again with a single penalty (this time applied to a single matrix though).
 #' 
 #' @param time A numeric vector containing positive time values in ms
-#' @param subs A factor vector containing subject identifiers
+#' @param fact A factor vector containing factor level identifiers
 #' @param pulse_locations A numeric vector containing index values of pulse loc.
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Parameter defined by Wierda et al. (scaling factor)
-WIER_IND_NNLS_model_setup <- function(expanded_time,expand_by,time,subs,pulse_locations,n,t_max,f) {
+WIER_IND_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse_locations,n,t_max,f) {
   
-  # Extract number of subjects
-  n_subs <- length(unique(subs))
+  # Extract number of factor levels
+  n_fact <- length(unique(fact))
   # Setup model matrix
-  slope <- create_slope_term(unique(time),n_subs)
+  slope <- create_slope_term(unique(time),n_fact)
   spike_matrix <- create_spike_matrix_term(expanded_time,expand_by,time,pulse_locations,n,t_max,f)
-  slope_matrix <- term_by_factor(slope,subs)
-  spike_matrix_by <- term_by_factor(spike_matrix,subs)
+  slope_matrix <- term_by_factor(slope,fact)
+  spike_matrix_by <- term_by_factor(spike_matrix,fact)
   
   trainingsMatrix <- cbind(slope_matrix,spike_matrix_by)
   
   # Setup Penalty definition to be implemented by c++
   # one individual slope penaltiy plus one
-  # shared penalty for all subjects (expressed on bases)
-  freq <- c(1, rep(1,length.out=n_subs))
-  # individual penalty is of size n_subs*n_subs. Also, Each of the shared
+  # shared penalty for all factor levels (expressed on bases)
+  freq <- c(1, rep(1,length.out=n_fact))
+  # individual penalty is of size n_fact*n_fact Also, Each of the shared
   # penalties is of size length(pulse_locations)*length(pulse_locations)
-  size <- c(n_subs,rep(length(pulse_locations),length.out=n_subs))
+  size <- c(n_fact,rep(length(pulse_locations),length.out=n_fact))
   
   
   # Define positive constraints
   constraints <- rep("c",ncol(trainingsMatrix))
-  constraints[1:n_subs] <- "u" # All parametric terms are unconstrained
+  constraints[1:n_fact] <- "u" # All parametric terms are unconstrained
   
   return(list("X"=trainingsMatrix,
               "Penalties"=list("freq"=freq,
@@ -264,35 +264,35 @@ WIER_IND_NNLS_model_setup <- function(expanded_time,expand_by,time,subs,pulse_lo
 #' terms, again with a single penalty (this time applied to a single matrix though).
 #' 
 #' @param time A numeric vector containing positive time values in ms
-#' @param subs A factor vector containing subject identifiers
+#' @param fact A factor vector containing factor level identifiers
 #' @param pulse_locations A numeric vector containing index values of pulse loc.
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Parameter defined by Wierda et al. (scaling factor)
-DEN_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,subs,pulse_locations,n,t_max,f) {
+DEN_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse_locations,n,t_max,f) {
   
-  # Extract number of subjects
-  n_subs <- length(unique(subs))
+  # Extract number of factor levels
+  n_fact <- length(unique(fact))
   # Setup model matrix
   intercept <- create_constant_term(time)
   spike_matrix <- create_spike_matrix_term(expanded_time,expand_by,time,pulse_locations,n,t_max,f)
-  intercept_matrix <- term_by_factor(intercept,subs)
-  spike_matrix_by <- term_by_factor(spike_matrix,subs)
+  intercept_matrix <- term_by_factor(intercept,fact)
+  spike_matrix_by <- term_by_factor(spike_matrix,fact)
   
   trainingsMatrix <- cbind(intercept_matrix,spike_matrix_by)
   
   # Setup Penalty definition to be implemented by c++
   # one individual intercept penalty plus one
-  # shared penalty for all subjects (expressed on bases)
-  freq <- c(1, n_subs)
-  # individual penalty is of size of size n_subs*n_subs. Also, Each of the shared
+  # shared penalty for all factor levels (expressed on bases)
+  freq <- c(1, n_fact)
+  # individual penalty is of size of size n_fact*n_fact Also, Each of the shared
   # penalties is of size length(pulse_locations)*length(pulse_locations)
-  size <- c(n_subs,length(pulse_locations))
+  size <- c(n_fact,length(pulse_locations))
   
   
   # Define positive constraints
   constraints <- rep("c",ncol(trainingsMatrix))
-  constraints[1:n_subs] <- "u" # All parametric terms are unconstrained
+  constraints[1:n_fact] <- "u" # All parametric terms are unconstrained
   
   return(list("X"=trainingsMatrix,
               "Penalties"=list("freq"=freq,
@@ -324,37 +324,38 @@ DEN_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,subs,pulse_
 #' (this time applied to a single matrix though).
 #' 
 #' @param time A numeric vector containing positive time values in ms
-#' @param subs A factor vector containing subject identifiers
+#' @param fact A factor vector containing factor level identifiers
 #' @param pulse_locations A numeric vector containing index values of pulse loc.
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Parameter defined by Wierda et al. (scaling factor)
-WIER_DEN_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,subs,pulse_locations,n,t_max,f) {
+WIER_DEN_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse_locations,n,t_max,f) {
   
-  # Extract number of subjects
-  n_subs <- length(unique(subs))
+  # Extract number of factor levels
+  n_fact <- length(unique(fact))
+  
   # Setup model matrix
   intercept <- create_constant_term(time)
-  slope <- create_slope_term(unique(time),n_subs)
+  slope <- create_slope_term(unique(time),n_fact)
   spike_matrix <- create_spike_matrix_term(expanded_time,expand_by,time,pulse_locations,n,t_max,f)
-  intercept_matrix <- term_by_factor(intercept,subs)
-  slope_matrix <- term_by_factor(slope,subs)
-  spike_matrix_by <- term_by_factor(spike_matrix,subs)
+  intercept_matrix <- term_by_factor(intercept,fact)
+  slope_matrix <- term_by_factor(slope,fact)
+  spike_matrix_by <- term_by_factor(spike_matrix,fact)
   
   trainingsMatrix <- cbind(intercept_matrix,slope_matrix,spike_matrix_by)
   
   # Setup Penalty definition to be implemented by c++
   # one individual intercept  and slope penalty plus one
-  # shared penalty for all subjects (expressed on bases)
-  freq <- c(1, 1, n_subs)
-  # individual penalties are of size n_subs*n_subs. Also, Each of the shared
+  # shared penalty for all factor levels (expressed on bases)
+  freq <- c(1, 1, n_fact)
+  # individual penalties are of size n_fact*n_fact Also, Each of the shared
   # penalties is of size length(pulse_locations)*length(pulse_locations)
-  size <- c(n_subs, n_subs, length(pulse_locations))
+  size <- c(n_fact, n_fact, length(pulse_locations))
   
   
   # Define positive constraints
   constraints <- rep("c",ncol(trainingsMatrix))
-  constraints[1:(2 * n_subs)] <- "u" # All parametric terms are unconstrained
+  constraints[1:(2 * n_fact)] <- "u" # All parametric terms are unconstrained
   
   return(list("X"=trainingsMatrix,
               "Penalties"=list("freq"=freq,
@@ -368,6 +369,7 @@ WIER_DEN_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,subs,p
 #' @export
 pupil_solve <- function(pulse_spacing,
                         data,
+                        factor_id="subject",
                         model="WIER_SHARED",
                         n=10.1,
                         t_max=930,f=1/(10^24),
@@ -387,6 +389,9 @@ pupil_solve <- function(pulse_spacing,
   y <- matrix(nrow = length(data$pupil),ncol=1)
   y[,1] <- data$pupil
   
+  # Extract factor variable
+  fact <- data[,colnames(data) == factor_id]
+  
   # Expand time for pulses that happened before the the time-window
   # that is considered.
   expanded_time <- data$time
@@ -395,7 +400,7 @@ pupil_solve <- function(pulse_spacing,
     time_expansion <- seq(0,(expand_by - sample_length), by = sample_length)
     expanded_time <- rep(c(time_expansion,
                            (unique(data$time) + expand_by)),
-                         times=length(unique(data$subject)))
+                         times=length(unique(fact)))
   }
   
   # Create pulse location vector
@@ -408,28 +413,28 @@ pupil_solve <- function(pulse_spacing,
     # Wierda et al. (2012) model, but with shared penalty!
     setup <- WIER_SHARED_NNLS_model_setup(expanded_time,
                                           (expand_by/sample_length),
-                                          data$time,data$subject,
+                                          data$time,fact,
                                           pulse_locations,
                                           n,t_max,f)
   } else if (model == "WIER_IND") {
     # Wierda et al. (2012) model, but with individual penalties!
     setup <- WIER_IND_NNLS_model_setup(expanded_time,
                                       (expand_by/sample_length),
-                                      data$time,data$subject,
+                                      data$time,fact,
                                       pulse_locations,
                                       n,t_max,f)
   } else if (model == "DEN_SHARED") {
     # Denison et al. (2012) model, but with shared penalty!
     setup <- DEN_SHARED_NNLS_model_setup(expanded_time,
                                          (expand_by/sample_length),
-                                         data$time,data$subject,
+                                         data$time,fact,
                                          pulse_locations,
                                          n,t_max,f)
   } else if (model == "WIER_DEN_SHARED") {
     # Combined model with shared penalty!
     setup <- WIER_DEN_SHARED_NNLS_model_setup(expanded_time,
                                               (expand_by/sample_length),
-                                              data$time,data$subject,
+                                              data$time,fact,
                                               pulse_locations,
                                               n,t_max,f)
   } else {
