@@ -231,7 +231,7 @@ void enforceConstraints(Eigen::VectorXd &cf,
 //
 // Optionally accumulates an estimate of the Hessian matrix, based on the
 // BFGS update (see: Practical Methods of Optimization). This option was made
-// available because X'*X/sigma is not necessarily representing the Hessian for
+// available because X'*X is not necessarily representing the Hessian for
 // the penalized NNLS model (it is for a traditional penalized AM, see Wood, 2011).
 // Kim, D., Sra, S., & Dhillon, I. S. (2006) have previously relied on this update
 // in the context of NNLS, which inspired the use here. We make sure that the BFGS
@@ -351,11 +351,14 @@ void agdTOptimize(Eigen::VectorXd &cf,
 
 // Fits an additive model based on Cholesky decomposition, see Wood &
 // Fasiolo (2017). If shouldAccumulH=true, the BFGS update is used to
-// accumulate the Hessian iteratively. Otherwise, the correct least squares
-// term (X'* X, see Wood, 2011) is used! While this is incorrect given that
-// actually an NNLS problem is solved, but in practice this usually works just
-// as well - with the smooth penalties being usually a bit lower. This also
-// speeds up computation and should be used for big model matrices!
+// accumulate the Hessian iteratively. The resulting matrix then replaces
+// the X'*X terms in the update steps presented by Wood & Fasiolo (2017).
+//
+// Otherwise, the un-constrained least squares solution for H (X'* X, see Wood, 2011)
+// is used! While this ignores that actually an NNLS problem is solved,
+// in practice this usually works just as well - with the smooth
+// penalties being usually a bit lower. This also speeds up computation
+// and should be used for big model matrices!
 int solveAM(Eigen::VectorXd &cf,
             double &sigma,
             std::vector<double> &finalLambdas,
