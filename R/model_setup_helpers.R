@@ -172,7 +172,7 @@ WIER_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse
   trainingsMatrix <- cbind(slope_matrix,spike_matrix_by)
   
   # Setup Penalty definition to be implemented by c++
-  # one individual slope penaltiy plus one
+  # one individual slope penalty plus one
   # shared penalty for all factor levels (expressed on bases)
   freq <- c(1, n_fact)
   # individual penalty is of size n_fact*n_fact Also, Each of the shared
@@ -601,14 +601,11 @@ cross_val_tmax <- function(cand_tmax,
     
     sqrt_err <- 0
     
-    cat("Handling tmax: ", tmc, "\n")
-    
     # Now handle each fold
     for (fold in folds) {
 
       # These are the trials excluded from the model training set.
       held_out_dat <- trial_data[trial_data$num_trial %in% fold,]
-      cat("Size Held-out set: ", nrow(held_out_dat), "\n")
       
       # Calculate average for held-out set.
       aggr_held_out <- aggregate(list("pupil"=held_out_dat$pupil),

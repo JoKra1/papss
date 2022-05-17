@@ -271,7 +271,8 @@ additive_pupil_sim <- function(nk=20,
               "data"=sim_dat))
 }
 
-#' Plot simulated pupil data against recovered weights
+#' Plot simulated pupil data against recovered weights. Only works for
+#' model setup like the one by Wierda et al. (2012).
 #' @param n_sub How many subjects were simulate.
 #' @param aggr_dat Aggregated simulation data
 #' @param sim_obj The list returned by additive_pupil_sim
@@ -391,4 +392,62 @@ plot_sim_vs_recovered <- function(n_sub,
          ylab="Spike strength",lwd=3)
     lines(unique(aggr_dat$time),pop_spike_est,col="red",lwd=3)
   }
+}
+
+#' Extracts demand curves for each level of the factor passed to the pupil_solve
+#' call.
+#' @param n_fact How many levels does the factor have.
+#' @param aggr_dat Aggregated data passed to solver
+#' @param sim_obj The list returned by additive_pupil_sim
+#' @param recovered_coef The coefficients returned by papss:pupil_solve()
+#' @param pulse_locations The index vector pointing at pulse locations passed to papss:pupil_solve()
+#' @param real_locations The vector with the time-points at which pulses are assumed passed to papss:pupil_solve()
+#' @export
+extract_demand_for_fact <- function(aggr_dat,
+                                    recovered_coef,
+                                    pulse_locations,
+                                    real_locations,
+                                    pulses_in_time,
+                                    expanded_time,
+                                    expanded_by,
+                                    factor_id="subject",
+                                    n_fact=10.1,
+                                    t_max_fact = 930,
+                                    f_fact=1/(10^24)){
+  
+  factor <- aggr_dat[,colnames(aggr_dat) == factor_id]
+  unq_factor <- unique(factor)
+  n_fact <- length(unq_factor)
+  
+  # First re-create demand-related parts of model matrix.
+  semiPredX <- papss::create_spike_matrix_term(unique(expanded_time),
+                                               expanded_by,
+                                               unique(aggr_dat$time),
+                                               pulse_locations,
+                                               n=n_fact,
+                                               t_max=t_max_fact,
+                                               f=f_fact)
+  
+  demand_dat <- NULL
+  
+  # Get estimates for each factor level
+  for(fi in 1:n_fact){
+    
+    # Get corresponding spline spike weights
+    splineCoef <- recovered_coef[((n_fact + 1) + ((fi - 1) * ncol(semiPredX))):(n_fact+(fi * ncol(semiPredX)))]
+    
+    # Align with original time variable
+    demand_trajectory <- rep(0,length.out = length(unique(aggr_dat$time)))
+    demand_trajectory[unique(aggr_dat$time) %in%
+                     real_locations[pulses_in_time]] <- splineCoef[pulses_in_time]
+    
+    # Collect demand data
+    demand_fact_dat <- data.frame("demand"=demand_trajectory,
+                                  "time"=unique(aggr_dat$time),
+                                  "factor"=rep(unq_factor[fi],
+                                               length.out=length(demand_trajectory)))
+    
+    demand_dat <- rbind(demand_dat,demand_fact_dat)
+  }
+  return(demand_dat)
 }
