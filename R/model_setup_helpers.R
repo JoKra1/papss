@@ -490,7 +490,7 @@ bootstrap_papss_standard_error <- function(cf,
                                            maxiter_outer=25,
                                            convergence_tol=1e-08,
                                            start_lambda=0.1,
-                                           should_accum_H=T) {
+                                           should_accum_H=F) {
   
   # Get pupil into required format
   y <- matrix(nrow = length(pupil_var),ncol=1)
