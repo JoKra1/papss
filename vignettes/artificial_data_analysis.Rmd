@@ -210,7 +210,8 @@ solvedPupil <- papss::pupil_solve(pulse_spacing = 1,
                            start_lambda = 0.0,
                            expand_by = 500,
                            pulse_dropping_factor = 3,
-                           f=(1/(10^(round(median(aggr_dat$pupil)/10) + round(sd(aggr_dat$pupil)/100)))))
+                           f=(1/(10^(round(median(aggr_dat$pupil)/10) + round(sd(aggr_dat$pupil)/100)))),
+                           should_accum_H = F)
 
 recovered_coef <- solvedPupil$coef
 model_mat <- solvedPupil$modelmat
@@ -315,7 +316,8 @@ solvedPupil <- papss::pupil_solve(pulse_spacing = 1,
                            start_lambda = 0.1,
                            expand_by = 500,
                            pulse_dropping_factor = 3,
-                           f=(1/(10^(round(median(aggr_dat$pupil)/10) + round(sd(aggr_dat$pupil)/100)))))
+                           f=(1/(10^(round(median(aggr_dat$pupil)/10) + round(sd(aggr_dat$pupil)/100)))),
+                           should_accum_H = F)
 
 recovered_coef <- solvedPupil$coef
 model_mat <- solvedPupil$modelmat
@@ -379,7 +381,8 @@ bootstrap <- papss::bootstrap_papss_standard_error(solvedPupil$coef,
                                                    maxiter_inner = 100000,
                                                    maxiter_outer = 10,
                                                    f=(1/(10^(round(median(aggr_dat$pupil)/10) +
-                                                             round(sd(aggr_dat$pupil)/100)))))
+                                                             round(sd(aggr_dat$pupil)/100)))),
+                           should_accum_H = F)
 ```
 
 We can now visualize the individual demand trajectories with an estimate of the

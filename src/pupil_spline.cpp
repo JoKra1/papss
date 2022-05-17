@@ -167,13 +167,7 @@ void LambdaTerm::embeddInS(Eigen::MatrixXd &embS, int &cIndex, bool shouldParame
 }
 
 // Perform a generalized Fellner Schall update step for a lambda term. This update rule is
-// discussed in Wood & Fasiolo (2017). In the paper, the authors provide the update in terms
-// of X and y (as well as X and z for generalized models). However, as discussed in Wood (2017)
-// and Wood (2011): the explicit calculation of (X' * X + embS)^-1 is undesirable.
-// Thus we here invoke the update on 'updated terms' (see code below for a quick overview
-// and Wood, 2011; Wood, 2017 for more details) obtained after repeated QR factorization
-// and Cholesky decomposition, as described extensively in Wood (2011, 2017) to improve on
-// the ill-conditioned nature of the former term.
+// discussed in Wood & Fasiolo (2017).
 void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::MatrixXd &cf, const Eigen::MatrixXd &inv,
                                    const Eigen::MatrixXd &gInv, int &cIndex, double sigma)
 {
@@ -193,11 +187,17 @@ void LambdaTerm::stepFellnerSchall(const Eigen::MatrixXd &embS, const Eigen::Mat
 
 // ##################################### Functions #####################################
 
-// Enforces positivity constraints on a vector. Based on the work by Hoeks & Levelt (1993)
+// Enforces positivity constraints on the coefficient vector. Based on the work by Hoeks & Levelt (1993)
 // we require all 'attention spikes', i.e., the weights in our cf vector to be positive.
 // Thus, we unfortunately cannot rely on a closed solution for our optimization problem but have to
 // resort to perform projected gradient optimization, as discussed by Ang (2020a; 2020b)
-void enforceConstraints(Eigen::VectorXd &cf, const Rcpp::StringVector &constraints)
+// Additionally sets the difference in gradient elements to zero that are
+// constrained in this step, so that the optional Hessian update (see agdTOptimize()) is only based on
+// information from parameters that are currently part of the demand
+// solution (i.e., spikes >= 0 that were not completely penalized away).
+void enforceConstraints(Eigen::VectorXd &cf,
+                        Eigen::VectorXd &gradDiff,
+                        const Rcpp::StringVector &constraints)
 {
 
     for (int idx = 0; idx < constraints.size(); ++idx)
@@ -210,6 +210,7 @@ void enforceConstraints(Eigen::VectorXd &cf, const Rcpp::StringVector &constrain
             if (cf(idx) < 0)
             {
                 cf(idx) = 0;
+                gradDiff(idx) = 0;
             }
         }
     }
@@ -227,21 +228,34 @@ void enforceConstraints(Eigen::VectorXd &cf, const Rcpp::StringVector &constrain
 // pseudo-code from the slides in the lecture series by Ang (2020) and has been
 // adapted to solve a penalized NNLS instead of a simple NNLS. The gradient of the
 // penalized least squares loss function is from Wood (2017).
+//
+// Optionally accumulates an estimate of the Hessian matrix, based on the
+// BFGS update (see: Practical Methods of Optimization). This option was made
+// available because X'*X is not necessarily representing the Hessian for
+// the penalized NNLS model (it is for a traditional penalized AM, see Wood, 2011).
+// Kim, D., Sra, S., & Dhillon, I. S. (2006) have previously relied on this update
+// in the context of NNLS, which inspired the use here. We make sure that the BFGS
+// update is only calculated on the current projected coefficient estimate (within
+// permitted parameter space) and that the difference in gradients is corrected for
+// this projection as well. In our own simulations this drastically improved the
+// convergence of the outer optimizer.
 void agdTOptimize(Eigen::VectorXd &cf,
+                  Eigen::MatrixXd &H,
                   std::vector<Eigen::VectorXd> &cfHistory,
                   const Eigen::MatrixXd &R,
                   const Eigen::VectorXd &f,
                   const Eigen::MatrixXd &embS,
                   const Rcpp::StringVector &constraints,
-                  double r,
                   int maxiter,
                   double tol,
-                  bool shouldCollectProgress)
+                  bool shouldCollectProgress,
+                  bool shouldAccumulH)
 {
     // Notation follows the one by Ang (2020).
     Eigen::MatrixXd Rt = R.transpose();
     Eigen::MatrixXd Q = Rt * R;
     Eigen::MatrixXd p = Rt * f;
+
 
     // Pre-calculate learning rate.
     Eigen::MatrixXd QQ = Q.array().pow(2); // Element wise Q_i**2 calculation
@@ -261,15 +275,32 @@ void agdTOptimize(Eigen::VectorXd &cf,
 
     // Error increase check.
     double prevErr = std::numeric_limits<double>::max();
+    
+    // Gradient history
+    Eigen::VectorXd prevGrad  = Eigen::VectorXd::Zero(R.cols());
 
     for (int i = 0; i < maxiter; ++i)
     {
 
+        // Calculate gradient
+        Eigen::VectorXd grad = (Q * ycf) - p;
+        
+        
         // Take a gradient step.
-        cf = ycf - (lr * ((Q * ycf) - p));
-
+        cf = ycf - (lr * grad);
+        
         // Enforce constraints.
-        enforceConstraints(cf, constraints);
+        Eigen::VectorXd w = grad - prevGrad;
+        enforceConstraints(cf,w, constraints);
+        
+        // BFGS Hessian aproximation using projected gradient!
+        // Originally taken from: http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.77.1058&rep=rep1&type=pdf
+        // Corrected for original notation in: Practical Methods of Optimization
+        if(i > 0 && shouldAccumulH){
+            Eigen::VectorXd u = cf - prevCf;
+            Eigen::MatrixXd Hnext = H - ((H * u * u.transpose() * H) / (u.transpose() * H * u)) + ((w * w.transpose()) / (w.transpose() * u));
+            H = Hnext;
+        }
 
         // Calculate momentum update based on alpha coefficient discussed
         // in Sutskever et al. (2013)
@@ -313,10 +344,21 @@ void agdTOptimize(Eigen::VectorXd &cf,
         prevCf = cf;
 
         prevErr = errDot;
+        
+        prevGrad = grad;
     }
 }
 
-// Fits an additive model based on the stable LS solutions discussed in Wood (2011,2017).
+// Fits an additive model based on Cholesky decomposition, see Wood &
+// Fasiolo (2017). If shouldAccumulH=true, the BFGS update is used to
+// accumulate the Hessian iteratively. The resulting matrix then replaces
+// the X'*X terms in the update steps presented by Wood & Fasiolo (2017).
+//
+// Otherwise, the un-constrained least squares solution for H (X'* X, see Wood, 2011)
+// is used! While this ignores that actually an NNLS problem is solved,
+// in practice this usually works just as well - with the smooth
+// penalties being usually a bit lower. This also speeds up computation
+// and should be used for big model matrices!
 int solveAM(Eigen::VectorXd &cf,
             double &sigma,
             std::vector<double> &finalLambdas,
@@ -331,7 +373,8 @@ int solveAM(Eigen::VectorXd &cf,
             int maxIter,
             int maxIterOptim,
             double tol,
-            bool shouldCollectProgress)
+            bool shouldCollectProgress,
+            bool shouldAccumulH)
 {
     // Set convergence code
     int convCode = -1;
@@ -339,30 +382,9 @@ int solveAM(Eigen::VectorXd &cf,
     // Get dimension of X for re-use later.
     int rowsX = X.rows();
     int colsX = X.cols();
-
-    // First compute QR decomposition of X.
-    Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr(X);
-    Eigen::MatrixXd R = qr.matrixR().template triangularView<Eigen::Upper>();
-
-    // We do not need the zero rows in R (i.e., we care only about the "reduced/thin" QR decomposition).
-    // Below, Eigen is forced to place the block in a temporary variable before assigning it to R.
-    // See: http://eigen.tuxfamily.org/dox/TopicLazyEvaluation.html
-    // See: https://stackoverflow.com/questions/30145771/shrink-matrix-with-eigen-using-block-in-assignment
-    R = R.block(0, 0, colsX, colsX).eval();
-
-    // We also do not need the full Q.
-    // See: https://forum.kde.org/viewtopic.php?f=74&t=91271
-    Eigen::MatrixXd Q = qr.householderQ().setLength(qr.nonzeroPivots()) * Eigen::MatrixXd::Identity(rowsX, colsX);
-
-    // Extract permutation matrix applied by Householder QR decomp and apply it to R.
-    // See: https://eigen.tuxfamily.org/dox/classEigen_1_1ColPivHouseholderQR.html
-    // See: https://en.wikipedia.org/wiki/QR_decomposition#Column_pivoting
-    Eigen::MatrixXd P = qr.colsPermutation();
-    R *= P.transpose();
-
-    // Now calculate f and r terms from Wood (2017)
-    Eigen::VectorXd f = Q.transpose() * y;
-    double r = y.dot(y) - f.dot(f);
+    
+    // Set inverse target (for later Cholesky solver)
+    Eigen::MatrixXd invTarget = Eigen::MatrixXd::Identity(colsX,colsX);
 
     // Prepare lambda terms.
     std::vector<std::unique_ptr<LambdaTerm>> lambdaContainer;
@@ -381,7 +403,14 @@ int solveAM(Eigen::VectorXd &cf,
 
     // Error increase check.
     double prevErr = std::numeric_limits<double>::max();
-
+    
+    // Placeholder for Hessian term
+    Eigen::MatrixXd H = Eigen::MatrixXd::Identity(colsX,colsX); // BFGS aprox.
+    
+    if(!shouldAccumulH) {
+      H = X.transpose() * X; // Least squares aprox.
+    }
+    
     // Now iteratively optimize cf and then the smoothness penalties.
     for (int i = 0; i < maxIter; ++i)
     {
@@ -398,20 +427,21 @@ int solveAM(Eigen::VectorXd &cf,
 
         // Optimize for cf given current lambda values.
         agdTOptimize(cf,
+                     H,
                      cfHistory,
-                     R,
-                     f,
+                     X,
+                     y,
                      embS,
                      constraints,
-                     r,
                      maxIterOptim,
                      tol,
-                     shouldCollectProgress);
+                     shouldCollectProgress,
+                     shouldAccumulH);
 
         // Now we calculate the current error term to check whether we can terminate
         // or whether lambda should still be optimized.
-        Eigen::VectorXd res = f - R * cf;
-        double errDot = res.dot(res) + r;
+        Eigen::VectorXd res = y - X * cf;
+        double errDot = res.dot(res);
 
         // Crude convergence control
         double absErrDiff = errDot > prevErr ? errDot - prevErr : prevErr - errDot;
@@ -419,7 +449,7 @@ int solveAM(Eigen::VectorXd &cf,
 
         if (absErrDiff < tol)
         {
-            convCode = 0;
+            convCode = i;
             break;
         }
 
@@ -427,73 +457,23 @@ int solveAM(Eigen::VectorXd &cf,
         if (maxIter == 1)
             break;
 
-        // Now calculate the next step in the stable LS approach:
-        // QR decomposition based on R + Cholesky factor of embS.
-
-        // First the Cholesky factor using LDL' decomposition:
+        // Compute inverse of H + embS using Cholesky decomposition as
+        // recommended by Wood & Fasiolo (2017).
+        // First form the Cholesky decomposition using LDL' decomposition:
         // See: https://eigen.tuxfamily.org/dox/classEigen_1_1LDLT.html
-        Eigen::LDLT<Eigen::MatrixXd> ldlt(embS);
-
-        // Now get the un-pivoted "Cholesky" factor of embS
-        // Notation follows: https://services.math.duke.edu/~jdr/2021f-218/materials/week11.pdf
-        // Start with un-pivoting the lower triangular matrix L.
-        Eigen::MatrixXd L = ldlt.matrixL();
-        Eigen::MatrixXd PL = ldlt.transpositionsP().transpose() * L;
-
-        // The .abs() is a cheat here so that the root does not fail.
-        // This is necessary since if embS is not positive semidefinite
-        // D will contain very small negative elements.
-        Eigen::VectorXd D = ldlt.vectorD().array().abs().sqrt();
-
-        // Final factor
-        Eigen::MatrixXd L1 = PL * D.asDiagonal();
-
-        // Concatenate R and L1
-        // See: https://stackoverflow.com/questions/21496157/eigen-how-to-concatenate-matrix-along-a-specific-dimension
-        Eigen::MatrixXd RL1(colsX + L1.cols(), colsX);
-        RL1 << R, L1.transpose();
-
-        // Now form the next QR decomposition (See above).
-        Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr2(RL1);
-        Eigen::MatrixXd R2 = qr2.matrixR().template triangularView<Eigen::Upper>();
-
-        // Extract relevant part again.
-        R2 = R2.block(0, 0, colsX, colsX).eval();
-
-        // In case the diagonal contains zero elements terminate nicely.
-        if (!(R2.diagonal().array().abs().matrix().minCoeff() > 0.0))
-        {
-            convCode = -2;
-            Rcpp::Rcerr << "Problem with calculating inverse for R2. Is the problem identifiable?\n";
-            break;
-        }
-
-        // Extract permutation matrix but do not reverse pivot on R2!
-        Eigen::MatrixXd P2 = qr2.colsPermutation();
-
-        // Q here needs an additional update that was not necessary in the first step.
-        Eigen::MatrixXd Q2 = qr2.householderQ().setLength(qr2.nonzeroPivots()) * Eigen::MatrixXd::Identity(RL1.rows(), colsX);
-        Q2 = Q * Q2.block(0, 0, colsX, colsX).eval();
-
-        // Now form the inverse of R2 (which is really the root of the inverse of X' %*% X + embS - see Wood (2017))
-        Eigen::MatrixXd rInv = R2.inverse();
-
-        // Now we can calculate the actual inverse, not the root, of the term above.
-        // After consulting Wood (2017) again I decided to apply the pivoting
-        // here, because then the remaining code can be used as is.
-        Eigen::MatrixXd Inv = P2 * rInv * rInv.transpose() * P2.transpose();
+        Eigen::LDLT<Eigen::MatrixXd> ldlt(H + embS);
+        
+        // Then compute the inverse
+        // See: https://github.com/kaskr/adcomp/issues/74
+        Eigen::MatrixXd Inv = ldlt.solve(invTarget);
 
         // We also need the pseudo inverse of embS for the EFS update.
         // See: https://eigen.tuxfamily.org/dox/classEigen_1_1CompleteOrthogonalDecomposition.html
         Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> ginvDecomp(embS);
         Eigen::MatrixXd gInv = ginvDecomp.pseudoInverse();
 
-        // f and r also need to be recomputed.
-        // Eigen::VectorXd f2 = Q2.transpose() * y;
-        // double r2 = y.dot(y) - f2.dot(f2);
-
         // Finally we need to calculate the current estimate of sigma^2.
-        sigma = errDot / (rowsX - (Inv * R.transpose() * R).trace());
+        sigma = errDot / (rowsX - (Inv * H).trace());
         // Rcpp::Rcout << sigma << "\n";
 
         // Now we can update all lamda terms.
@@ -529,7 +509,8 @@ Rcpp::List wrapAmSolve(const Eigen::Map<Eigen::MatrixXd> X,
                        int maxIterOptim,
                        double tol = 0.001,
                        bool shouldCollectProgress = false,
-                       double startLambda = 0.1)
+                       double startLambda = 0.1,
+                       bool shouldAccumulH = true)
 {
     // Create a set of coefficients, will be passed down and updated by solveAM
     Eigen::VectorXd cf = Eigen::VectorXd(initCf);
@@ -538,6 +519,7 @@ Rcpp::List wrapAmSolve(const Eigen::Map<Eigen::MatrixXd> X,
     double sigma = 0.0;
     std::vector<double> finalLambdas;
     std::vector<Eigen::VectorXd> cfHistory;
+
 
     // Solve the additive model
     int convCode = solveAM(cf,
@@ -554,7 +536,8 @@ Rcpp::List wrapAmSolve(const Eigen::Map<Eigen::MatrixXd> X,
                            maxIter,
                            maxIterOptim,
                            tol,
-                           shouldCollectProgress);
+                           shouldCollectProgress,
+                           shouldAccumulH);
 
     // Convert cfHistory into something that can more easily be passed to R
     Eigen::MatrixXd cfHistMat = Eigen::MatrixXd::Zero(1, 1);
