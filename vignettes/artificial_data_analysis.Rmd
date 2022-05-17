@@ -548,7 +548,7 @@ for (si in 1:n) {
                            model="WIER_SHARED",
                            start_lambda = 0.1,
                            expand_by = 500,
-                           pulse_dropping_factor = 3,
+                           pulse_dropping_factor = 4,
                            f=(1/(10^(24))),
                            t_max = subj_t_max)
   
@@ -577,8 +577,24 @@ for (si in 1:n) {
 # Now analyzie via mgcv:
 demand_diff_dat$subject <- as.factor(demand_diff_dat$subject)
 
-m1 <- gam(demand_diff ~ s(time) + s(time, subject, bs="fs", m=1), data = demand_diff_dat)
+par(mfrow=c(2,2))
+for(si in 1:n){
+  plot(demand_diff_dat$time[demand_diff_dat$subject == si],
+       demand_diff_dat$demand_diff[demand_diff_dat$subject == si],
+       type="l",
+       xlab="Time",
+       ylab="Demand difference")
+}
+
+# Everything important happens before 2000 ms
+
+demand_diff_dat <- demand_diff_dat[demand_diff_dat$time < 2000,]
+
+par(mfrow=c(1,1))
+m1 <- gam(demand_diff ~ s(time,k=15) + s(subject,bs="re"), data = demand_diff_dat)
 plot(m1)
+summary(m1)
+gam.check(m1)
 ```
 
 # Final remarks
