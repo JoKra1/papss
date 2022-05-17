@@ -379,7 +379,7 @@ pupil_solve <- function(pulse_spacing,
                         convergence_tol=1e-08,
                         should_collect_progress=F,
                         start_lambda=0.1,
-                        should_accum_H=T,
+                        should_accum_H=F,
                         init_cf = NULL,
                         expand_by = 800,
                         sample_length = 20) {
