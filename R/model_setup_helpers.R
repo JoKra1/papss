@@ -558,3 +558,119 @@ bootstrap_papss_standard_error <- function(cf,
               "mean"=B_b_m,
               "individualParams"=B_b))
 }
+
+#' Denison et al. (2020) report large variance in the optimal t_max parameters
+#' between subjects. This function can thus be used to recover the optimal parameter
+#' for subjects using cross-validation. The same procedure utilized by Denison et
+#' al. (2020) is adopted here: 1/n trials are held-out and the model is fitted
+#' on the remaining trials. The error between the average on the held-out set and
+#' the model prediction is then taken as the cross-validation error. The held-out set
+#' cycles through the entire data-set resulting in n repetitions and n cross-validation errors.
+#' The average cross-validation error for a specific t_max is then reported.
+#' 
+#' Note that different forms of cross-validation are possible depending on the
+#' experimental design and one's assumptions. It is possible to optimize t_max for
+#' each subject for each condition individually (then only data from one subject and
+#' one condition should be passed to the function) or across conditions (then data from
+#' all conditions should be passed to the function). Based on the findings by Denison
+#' et al. (2020), the latter is likely sufficient and more appropriate.
+#' @export
+cross_val_tmax <- function(cand_tmax,
+                        folds,
+                        pulse_spacing,
+                        trial_data,
+                        factor_id="subject",
+                        model="WIER_SHARED",
+                        n=10.1,
+                        f=1/(10^24),
+                        pulse_dropping_factor=5,
+                        maxiter_inner=10000,
+                        maxiter_outer=25,
+                        convergence_tol=1e-08,
+                        start_lambda=0.1,
+                        should_accum_H=F,
+                        init_cf = NULL,
+                        expand_by = 800,
+                        sample_length = 20){
+  
+  # Collect cross-validation errors
+  errs <- c()
+  
+  # Loop over all t_max candidates
+  for (tmc in cand_tmax){
+    
+    sqrt_err <- 0
+    
+    cat("Handling tmax: ", tmc, "\n")
+    
+    # Now handle each fold
+    for (fold in folds) {
+
+      # These are the trials excluded from the model training set.
+      held_out_dat <- trial_data[trial_data$num_trial %in% fold,]
+      cat("Size Held-out set: ", nrow(held_out_dat), "\n")
+      
+      # Calculate average for held-out set.
+      aggr_held_out <- aggregate(list("pupil"=held_out_dat$pupil),
+                                 by=list("factor"=held_out_dat[,colnames(held_out_dat) == factor_id],
+                                         "time"=held_out_dat$time),FUN=mean)
+      
+      aggr_held_out <- aggr_held_out[order(aggr_held_out$factor),]
+      
+      # This is the remaining data on which the model is fitted.
+      remaining_dat <- trial_data[!(trial_data$num_trial %in% fold),]
+      
+      # This are the actual averages passed to the model
+      aggr_remaining <- aggregate(list("pupil"=remaining_dat$pupil),
+                                  by=list("factor"=remaining_dat[,colnames(remaining_dat) == factor_id],
+                                          "time"=remaining_dat$time),FUN=mean)
+      
+      aggr_remaining <- aggr_remaining[order(aggr_remaining$factor),]
+      
+      # Solve pupil model
+      solvedPupil <- pupil_solve(pulse_spacing,
+                                 aggr_remaining,
+                                 "factor",
+                                 model,
+                                 n,
+                                 t_max=tmc,
+                                 f,
+                                 pulse_dropping_factor,
+                                 maxiter_inner,
+                                 maxiter_outer,
+                                 convergence_tol,
+                                 F,
+                                 start_lambda,
+                                 should_accum_H,
+                                 init_cf,
+                                 expand_by,
+                                 sample_length)
+      
+      recovered_coef <- solvedPupil$coef
+      model_mat <- solvedPupil$modelmat
+      
+      # Calculate held-out residuals
+      res <- aggr_held_out$pupil - model_mat %*% recovered_coef
+      
+      # And squared error
+      sum_sqrt_res <- sum(res**2)
+      
+      # Update average error
+      sqrt_err <- sqrt_err + ((nrow(held_out_dat)/nrow(trial_data)) * sum_sqrt_res)
+      
+
+    }
+    
+    # Collect error for this particular t_max
+    errs <- c(errs,sqrt_err)
+  }
+  
+  # Plot cross-validation curve
+  plot(cand_tmax,errs,ylim=c(min(errs) - 0.01*min(errs),
+                             max(errs) + 0.01*max(errs)),
+       ylab="Cross-validation error",
+       xlab="t_max candidates")
+  lines(cand_tmax,errs)
+  
+  return(errs)
+}
