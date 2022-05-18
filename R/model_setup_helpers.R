@@ -757,7 +757,8 @@ cross_val_tmax <- function(cand_tmax,
              aggr_remaining$pupil,
              type="l",lwd=3,
              xlab="Index",
-             ylab="Pupil dilation")
+             ylab="Pupil dilation",
+             main=paste0("t_max: ", tmc))
         lines(1:nrow(model_mat),
               model_mat %*% recovered_coef,
               lwd=3,
