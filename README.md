@@ -1,11 +1,11 @@
 # papss: Penalized Additive Pupil Spline Solver
 
 ## Description:
-The code in this repository allows to estimate a penalized version of the additive pupil model originally proposed by Hoeks & Levelt (1993) and then refined by Wierda et al. (2012) (for a more recent refinement see Denison et al. 2020 and for a review about applications see Fink et al. (2021)). More specifically, the model relies on the pupil response function recovered by Hoeks & Levelt (1993) as a basis function for an additive model (e.g., Wood, 2017) of pupil dilation over time. Each pupil basis is associated with a weight term, reflecting the magnitude of a spike in cognitive demand (Hoeks & Levelt, 1993; Wierda et al., 2012). Imposing a penalty on these terms (see Eilers & Marx, 2010 or Wood, 2017 for a discussion of the penalties used here and Eilers & Marx, 1996 for a discussion of how penalties imposed directly on the coefficients should be interpreted) thus allows to treat the set of all weights for the pupil response basis functions as the set of *possible spikes* in attention, since only demand spikes with a weight > 0 end up contributing to the change in pupil dilation over time.
+The code in this repository allows to estimate a penalized version of the additive pupil model originally proposed by Hoeks & Levelt (1993) and then refined by Wierda et al. (2012) (for a more recent overview and additional extensions see Denison et al. 2020 and for a review about applications see Fink et al. (2021)). More specifically, the model relies on the pupil response function recovered by Hoeks & Levelt (1993) as a basis function for an additive model (e.g., Wood, 2017) of pupil dilation over time. Each pupil basis is associated with a weight term, reflecting the magnitude of a spike in cognitive demand (Hoeks & Levelt, 1993; Wierda et al., 2012). As is typically done in **penalized additive models**, a penalty is imposed on these terms (see Eilers & Marx, 2010 or Wood, 2017 for a discussion of the penalties used here and Eilers & Marx, 1996 for a discussion of how penalties imposed directly on the coefficients should be interpreted). This enables the model to better recover continuous changes in demand compared to what would be possible without the penalty.
 
-To estimate the spike weights we are faced with a similar problem as the one described in Bolduc et al. (2017): Wood (2011; 2017) provides us with all the necessary tools to estimate the weights that minimize the difference between the weighted sum of the pupil-response basis functions (i.e., our pupil-spline) and the observed change in pupil dilation over time. Yet, as argued by Hoeks & Levelt (1993), there is no easy physical justification for negative spikes (i.e., these would imply that a decrease in demand, relative to baseline demand, leads to *active constriction* of the pupil). Thus, as discussed by Bolduc et al. (2017) we are only interested in finding the best (in a least-squares/ML sense) spike weight estimate in a sub-set of physically plausible, that is positive, weights. Solving this Non-negative least squares problem (NNLS, see Bolduc et al., 2017) is achieved here by relying on projected gradient descent (PGD, see Ang, 2020a; Ang, 2020b; Bolduc, 2017), where after each (accelerated) gradient step, the spike weights are constrained to be >= 0.
+Demand weights are recovered by obtaining the non-negative least squares estimate (NNLS, see Bolduc et al., 2017) that minimizes the difference between the weighted sum of the pupil-response basis functions (i.e., our pupil-spline) and the observed pupil dilation time-course. NNLS was chosen because Hoeks & Levelt (1993) argued that there is no easy physical justification for negative spikes (i.e., these would imply that a decrease in demand, relative to baseline demand, leads to *active constriction* of the pupil). Solving the NNLS problem is achieved here by relying on projected gradient descent (PGD, see Ang, 2020a; Ang, 2020b; Bolduc, 2017), where after each (accelerated, see Sutskever et al. 2013) gradient step, the spike weights are constrained to be >= 0.
 
-To estimate the optimal degree of spike penalization we rely on the generalized Fellner-Schall update for the smoothness penalty described by Wood & Fasiolo (2017). The update rule allows to maximize the restricted likelihood of the additive pupil model (i.e., pupil dilation = pupil spline + N(0, sigma^2)), after the optimal estimates of the spike weights have been obtained for a given degree of penalization (see Wood & Fasiolo, 2017 for details). Applying this rule to the problem here was motivated by the fact that the restricted likelihood of the pupil dilation model is only a function of the penalty term (Wood, 2017), maximizing it depends only on the latest estimate of the spike weights (Wood, 2011), and all estimates of the former obtained via PGD are also included in the set of all weights to which the update rule could possibly be applied (Bolduc et al., 2017).
+To estimate the optimal degree of spike penalization we rely on the generalized Fellner-Schall update for the smoothness penalty described by Wood & Fasiolo (2017). The update rule allows to maximize the restricted likelihood of the additive pupil model (i.e., pupil dilation = pupil spline + N(0, sigma^2)), after the optimal estimates of the spike weights have been obtained for a given degree of penalization (see Wood & Fasiolo, 2017 for details). The update equation was designed for unconstrained least squares problems, and is based on the default Hessian matrix for these models (see Wood, 2011). In practice, using the latter for this problem works reasonably well. Alternatively, ``papss`` offers to approximate the Hessian from projected gradient information using the BFGS update (Fletcher, 2000; Kim et al., 2006).
 
 ## Implementation details:
 The definition of the model including model matrix setup is handled in R (R core team, 2021). Solving the penalized NNLS problem and optimizing the additive model is implemented in Eigen (Guennebaud et al., 2010) in C++. RCPP and RCPPEIGEN  (Bates & Eddelbuettel) act as interface between R and C++. 
@@ -20,10 +20,11 @@ Sys.which("make")
 You can also use this command in case you are unsure whether you have already installed RTools in the past.
 
 
-Subsequently (immediately on macOS), you should be able to install the package right from this repository using functionality offered by the devtools package, as described for example [here](https://cran.r-project.org/web/packages/githubinstall/vignettes/githubinstall.html). Importantly, if you want to build the example vignette, you should set the *build_vignettes* argument to *True*:
+Subsequently (immediately on macOS), you should be able to install the package right from this repository using functionality offered by the ``remotes`` package, as described for example [here](https://cran.r-project.org/web/packages/remotes/readme/README.html). Importantly, if you want to build the example vignette, you should set the *build_vignettes* argument to *True*:
 
 ```
-devtools::install_github("https://github.com/JoKra1/papss",build_vignettes = T)
+install.packages("remotes")
+remotes::install_github("JoKra1/papss",build_vignettes = T)
 ```
 
 Note that building the vignette might take some time, since the solver is used on artificial data generated
@@ -31,8 +32,8 @@ for 15 subjects. Once the installation has been completed, you can inspect the v
 one of the following commands:
 
 ```
-browseVignettes() // Search for 'papss'
-vignette("artificial_data_analysis", package="papss") // Browse vignette directly
+browseVignettes() # Search for 'papss'
+vignette("artificial_data_analysis", package="papss") # Browse vignette directly
 ```
 
 ## ToDo:
@@ -57,20 +58,24 @@ vignette("artificial_data_analysis", package="papss") // Browse vignette directl
 
 8. Fink, L., Simola, J., Tavano, A., Lange, E. B., Wallot, S., & Laeng, B. (2021). From pre-processing to advanced dynamic modeling of pupil data. PsyArXiv. https://doi.org/10.31234/osf.io/wqvue
 
-9. Guennebaud, G., Jacob, B., & others. (2010). Eigen v3. http://eigen.tuxfamily.org
+9. Fletcher, R. (2000). Practical Methods of Optimization. John Wiley & Sons, Incorporated. http://ebookcentral.proquest.com/lib/rug/detail.action?docID=1212544
 
-10. Hoeks, B., & Levelt, W. (1993). Pupillary dilation as a measure of attention: A quantitative system analysis. Behav. Res. Meth. Ins. C., 25, 16–26.
+10. Guennebaud, G., Jacob, B., & others. (2010). Eigen v3. http://eigen.tuxfamily.org
 
-11. R Core Team. (2021). R: A Language and Environment for Statistical Computing. R Foundation for Statistical Computing. https://www.R-project.org/
+11. Hoeks, B., & Levelt, W. (1993). Pupillary dilation as a measure of attention: A quantitative system analysis. Behav. Res. Meth. Ins. C., 25, 16–26.
 
-12. Sutskever, I., Martens, J., Dahl, G., & Hinton, G. (2013). On the importance of initialization and momentum in deep learning. Proceedings of the 30th International Conference on Machine Learning, 1139–1147. https://proceedings.mlr.press/v28/sutskever13.html
+12. Kim, D., Sra, S., & Dhillon, I. S. (2006). A New Projected Quasi-Newton Approach for the Non-negative Least Squares Problem.
 
-13. Tseng, P. (2008). On Accelerated Proximal Gradient Methods for Convex-Concave Optimization. https://www.mit.edu/~dimitrib/PTseng/papers.html
+13. R Core Team. (2021). R: A Language and Environment for Statistical Computing. R Foundation for Statistical Computing. https://www.R-project.org/
 
-14. Wierda, S. M., van Rijn, H., Taatgen, N. A., & Martens, S. (2012). Pupil dilation deconvolution reveals the dynamics of attention at high temporal resolution. Proceedings of the National Academy of Sciences of the United States of America, 109(22), 8456–8460. https://doi.org/10.1073/pnas.1201858109
+14. Sutskever, I., Martens, J., Dahl, G., & Hinton, G. (2013). On the importance of initialization and momentum in deep learning. Proceedings of the 30th International Conference on Machine Learning, 1139–1147. https://proceedings.mlr.press/v28/sutskever13.html
 
-15. Wood, S. N., & Fasiolo, M. (2017). A generalized Fellner-Schall method for smoothing parameter optimization with application to Tweedie location, scale and shape models. Biometrics, 73(4), 1071–1081. https://doi.org/10.1111/biom.12666
+15. Tseng, P. (2008). On Accelerated Proximal Gradient Methods for Convex-Concave Optimization. https://www.mit.edu/~dimitrib/PTseng/papers.html
 
-16. Wood, S. N. (2011). Fast stable restricted maximum likelihood and marginal likelihood estimation of semiparametric generalized linear models: Estimation of Semiparametric Generalized Linear Models. Journal of the Royal Statistical Society: Series B (Statistical Methodology), 73(1), 3–36. https://doi.org/10.1111/j.1467-9868.2010.00749.x
+16. Wierda, S. M., van Rijn, H., Taatgen, N. A., & Martens, S. (2012). Pupil dilation deconvolution reveals the dynamics of attention at high temporal resolution. Proceedings of the National Academy of Sciences of the United States of America, 109(22), 8456–8460. https://doi.org/10.1073/pnas.1201858109
 
-17. Wood, S. N. (2017). Generalized Additive Models: An Introduction with R, Second Edition (2nd ed.). Chapman and Hall/CRC.
+17. Wood, S. N., & Fasiolo, M. (2017). A generalized Fellner-Schall method for smoothing parameter optimization with application to Tweedie location, scale and shape models. Biometrics, 73(4), 1071–1081. https://doi.org/10.1111/biom.12666
+
+18. Wood, S. N. (2011). Fast stable restricted maximum likelihood and marginal likelihood estimation of semiparametric generalized linear models: Estimation of Semiparametric Generalized Linear Models. Journal of the Royal Statistical Society: Series B (Statistical Methodology), 73(1), 3–36. https://doi.org/10.1111/j.1467-9868.2010.00749.x
+
+19. Wood, S. N. (2017). Generalized Additive Models: An Introduction with R, Second Edition (2nd ed.). Chapman and Hall/CRC.

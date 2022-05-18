@@ -475,7 +475,6 @@ for(si in 1:n){
 }
 
 # Everything important happens before 2000 ms
-
 demand_diff_dat <- demand_diff_dat[demand_diff_dat$time < 2000,]
 
 par(mfrow=c(1,1))

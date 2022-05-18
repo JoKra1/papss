@@ -230,15 +230,14 @@ void enforceConstraints(Eigen::VectorXd &cf,
 // penalized least squares loss function is from Wood (2017).
 //
 // Optionally accumulates an estimate of the Hessian matrix, based on the
-// BFGS update (see: Practical Methods of Optimization). This option was made
-// available because X'*X is not necessarily representing the Hessian for
-// the penalized NNLS model (it is for a traditional penalized AM, see Wood, 2011).
-// Kim, D., Sra, S., & Dhillon, I. S. (2006) have previously relied on this update
-// in the context of NNLS, which inspired the use here. We make sure that the BFGS
-// update is only calculated on the current projected coefficient estimate (within
-// permitted parameter space) and that the difference in gradients is corrected for
-// this projection as well. In our own simulations this drastically improved the
-// convergence of the outer optimizer.
+// BFGS update (see: Fletcher, 2000). Kim, D., Sra, S., & Dhillon, I. S. (2006)
+// have previously relied on this update in the context of NNLS, which inspired the
+// use here. Specifically, we calculate the BFGS update only after the projection
+// of the gradient vector has been applied and after the difference in gradients have
+// been corrected for this projection as well (see enforceConstraints()).
+// In our own simulations this drastically improved the convergence of the outer optimizer.
+// Generally, we observed that this approximation leads to much smoother models, and
+// is thus desirable in case under-smoothing is observed.
 void agdTOptimize(Eigen::VectorXd &cf,
                   Eigen::MatrixXd &H,
                   std::vector<Eigen::VectorXd> &cfHistory,
@@ -354,11 +353,9 @@ void agdTOptimize(Eigen::VectorXd &cf,
 // accumulate the Hessian iteratively. The resulting matrix then replaces
 // the X'*X terms in the update steps presented by Wood & Fasiolo (2017).
 //
-// Otherwise, the un-constrained least squares solution for H (X'* X, see Wood, 2011)
-// is used! While this ignores that actually an NNLS problem is solved,
-// in practice this usually works just as well - with the smooth
-// penalties being usually a bit lower. This also speeds up computation
-// and should be used for big model matrices!
+// Otherwise, the least squares solution for H (X'* X, see Wood, 2011)
+// is used directly! This works well in practice and also speeds up computation
+// which is also why it is the default option!
 int solveAM(Eigen::VectorXd &cf,
             double &sigma,
             std::vector<double> &finalLambdas,
@@ -408,7 +405,7 @@ int solveAM(Eigen::VectorXd &cf,
     Eigen::MatrixXd H = Eigen::MatrixXd::Identity(colsX,colsX); // BFGS aprox.
     
     if(!shouldAccumulH) {
-      H = X.transpose() * X; // Least squares aprox.
+      H = X.transpose() * X; // Least squares.
     }
     
     // Now iteratively optimize cf and then the smoothness penalties.
