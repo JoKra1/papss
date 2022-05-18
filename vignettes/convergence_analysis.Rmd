@@ -57,17 +57,6 @@ plot(aggr_dat$time[aggr_dat$subject == 1],
 
 ```
 
-We also need to define pulse locations again.
-
-```{r}
-# Calculate pulse locations
-last_pulse_dat <- length(unique(aggr_dat$time)) - (3 * round(930/100)) - 1
-  
-# Define possible pulse location
-pulse_locations_dat <- seq(1,last_pulse_dat,1)
-real_locations_dat <- unique(aggr_dat$time)[pulse_locations_dat]
-```
-
 ## Investigating the identifiability of the problems
 
 How will the solver deal with different starting values?
@@ -81,14 +70,15 @@ for(i in 1:iter){
   set.seed(i)
   
   # Solve the pupil spline
-  solvedPupil <- papss::pupil_solve(pulse_locations_dat,
-                             real_locations_dat,
-                             data = aggr_dat,
-                             maxiter_inner = 100000,
-                             maxiter_outer = 30,
-                             model="WIER_SHARED",
-                             convergence_tol = 1e-08,
-                             should_collect_progress=T)
+  solvedPupil <- papss::pupil_solve(pulse_spacing = 1,
+                           data = aggr_dat,
+                           maxiter_inner = 100000,
+                           maxiter_outer = 30,
+                           model="WIER_SHARED",
+                           expand_by = 0,
+                           pulse_dropping_factor = 3,
+                           f=(1/(10^(24))),
+                           should_collect_progress = T)
   
   # Coefficient history
   hist = solvedPupil$coefHistory
@@ -131,20 +121,26 @@ plot(1:nrow(chist),
        xlab="Coefficient",
        ylab="Coefficient value",type="l",lwd=3)
 
+
+
+for(hi in 2:iter){
+  chist <- hist_collection[[hi]]
+  lines(1:nrow(chist), chist[,ncol(chist)],
+       col=ri,
+       ylim=c(-3,3),
+       xlab="Coefficient",
+       ylab="Coefficient value",type="l",lwd=3,lty=3)
+}
+
 # Visualize last 25 coefficient sets
 heatmap(chist[,(ncol(chist) - 20):ncol(chist)],
         Colv = NA,
         Rowv = NA,
         scale = 'none')
 
+
 for(hi in 2:iter){
   chist <- hist_collection[[hi]]
-  plot(1:nrow(chist), chist[,ncol(chist)],
-       col=ri,
-       ylim=c(-3,3),
-       xlab="Coefficient",
-       ylab="Coefficient value",type="l",lwd=3)
-  
   heatmap(chist[,(ncol(chist) - 20):ncol(chist)],
           Colv = NA,
           Rowv = NA,
