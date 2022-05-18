@@ -2,11 +2,7 @@
 % Please edit documentation in R/model_setup_helpers.R
 \name{create_slope_term}
 \alias{create_slope_term}
-\title{Creates a single slope term (at the population level)
-Can be manipulated via "by" argument as done in mgcv.
-Note: Use of unique values that are just repeated requires all levels
-of the category factor (usually subjects) to have the same values on the
-covariate time.}
+\title{Creates a single slope term (at the population level)}
 \usage{
 create_slope_term(time_unq, n_cat)
 }
@@ -16,9 +12,8 @@ create_slope_term(time_unq, n_cat)
 \item{n_cat}{Integer, number of categories for which slope should be repeated.}
 }
 \description{
-Creates a single slope term (at the population level)
 Can be manipulated via "by" argument as done in mgcv.
 Note: Use of unique values that are just repeated requires all levels
 of the category factor (usually subjects) to have the same values on the
-covariate time.
+variable time.
 }

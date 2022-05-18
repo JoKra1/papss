@@ -1,5 +1,7 @@
+#' @title
 #' Create "basis-functions" that make up the pupil spline.
 #' 
+#' @description
 #' The basis is calculated using the pupil response function originally
 #' described by Hoeks & levelt (1993). Wierda et al. (2012) refined it
 #' by adding an additional scaling paramter (f). The code here makes use
@@ -7,18 +9,20 @@
 #' response function and is based on the code provided by Wierda et al (2012)
 #' in their supplementary materials.
 #' 
+#' @details
 #' See: Wierda, S. M., van Rijn, H., Taatgen, N. A., & Martens, S. (2012).
 #' Pupil dilation deconvolution reveals the dynamics of attention at high
 #' temporal resolution. Proceedings of the National Academy of Sciences of
 #' the United States of America, 109(22), 8456–8460.
 #' https://doi.org/10.1073/pnas.1201858109
-#' 
 #' See: Hoeks, B., & Levelt, W. (1993). Pupillary dilation as a measure of
 #' attention: A quantitative system analysis.
 #' Behav. Res. Meth. Ins. C., 25, 16–26.
 #' 
 #' @param i An integer representing index of a basis function.
 #' @param time A numeric vector containing positive time values in ms
+#' @param expanded_time A numeric vector containing positive time values in ms, expanded by a certain amount of ms
+#' @param expand_by Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms
 #' @param pulse_locations A numeric vector containing index values of pulse loc.
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
@@ -62,7 +66,10 @@ h_basis <- function(i,expanded_time,expand_by,time,pulse_locations,n,t_max,f) {
   
 }
 
+#' @title
 #' Creates a single intercept term (at the population level).
+#' 
+#' @description
 #' Can be manipulated via "by" argument as done in mgcv.
 #' 
 #' @param time A numeric vector containing positive time values in ms
@@ -72,11 +79,14 @@ create_constant_term <- function(time) {
   return(intercept)
 }
 
+#' @title
 #' Creates a single slope term (at the population level)
+#' 
+#' @description
 #' Can be manipulated via "by" argument as done in mgcv.
 #' Note: Use of unique values that are just repeated requires all levels
 #' of the category factor (usually subjects) to have the same values on the
-#' covariate time.
+#' variable time.
 #' 
 #' @param time_unq A numeric vector containing unique positive time values in ms
 #' @param n_cat Integer, number of categories for which slope should be repeated.
@@ -87,14 +97,20 @@ create_slope_term <- function(time_unq,n_cat) {
   return(slope)
 }
 
+#' @title
 #' Create basis part of the model matrix as described by Wood (2017).
+#' 
+#' @description
 #' Essentially, this means creating a matrix with a column for each
 #' pulse location and to assign a pupil basis (convolved with that location)
 #' to each column.
 #' 
+#' @details
 #' See: Wood, S. N. (2017). Generalized Additive Models: An Introduction with R,
 #' Second Edition (2nd ed.). Chapman and Hall/CRC.
 #' 
+#' @param expanded_time A numeric vector containing positive time values in ms, expanded by a certain amount of ms
+#' @param expand_by Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms
 #' @param time A numeric vector containing positive time values in ms
 #' @param pulse_locations A numeric vector containing index values of pulse loc.
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
@@ -112,14 +128,16 @@ create_spike_matrix_term <- function(expanded_time,expand_by,time,pulse_location
   return(spike_matrix)
 }
 
-#' Achieves "by" keyword functionality used in mgcv to enable by-factor
-#' smooths (see. Wood, 2017).
-#' 
+#' @title
+#' Achieves "by" keyword functionality
+#'
+#'@description
+#' Used in mgcv to enable by-factor smooths!
+#'
+#' @details
 #' See: Wood, S. N. (2017). Generalized Additive Models: An Introduction with R,
 #' Second Edition (2nd ed.). Chapman and Hall/CRC.
-#' 
 #' See 'by' at: https://www.rdocumentation.org/packages/mgcv/versions/1.8-38/topics/s
-#' 
 #' Code is based on: https://stats.stackexchange.com/questions/110472/how-exactly-is-the-sum-or-mean-centering-constraint-for-splines-also-w-r-t-g
 #' 
 #' @param term A slope, splike_matrix, or intercept.
@@ -136,6 +154,10 @@ term_by_factor <- function(term,fact) {
 
 ### PAPSS model templates ###
 
+#' @title
+#' Model template based on Wierda et al.(2012)'s model
+#'
+#' @description
 #' Creates trainings matrix and penalties for a fully penalized
 #' version of the original Wierda et al. (2012) model.
 #' Like by Wierda et al. separate sets of coefficients are estimated per
@@ -144,21 +166,22 @@ term_by_factor <- function(term,fact) {
 #' Wierda et al. (2012) introduced. These are not constrained - since their
 #' primary purpose was to account for drift in the pupil averages of individual
 #' subjects.
-#' 
 #' This model differs from the one by Wierda et al. (2012) in that it penalizes
 #' the coefficients corresponding to the h_basis terms. Specifically, it
 #' enforces a single penalty term shared by all subjects (e.g., this is
-#' similar to the 'fs' basis in mgcv or can be achieved by using the 'id' keyword
-#' in a 'by' factor smooth.). The form of the penalty expressed on all of the
+#' similar to the 'fs' basis in mgcv). The form of the penalty expressed on all of the
 #' basis functions is a simple identity matrix. We here also penalize all slope
-#' terms, again with a single penalty (this time applied to a single matrix though).
+#' terms, again with a single penalty.
 #' 
+#' @param expanded_time A numeric vector containing positive time values in ms, expanded by a certain amount of ms
+#' @param expand_by Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms
 #' @param time A numeric vector containing positive time values in ms
 #' @param fact A factor vector containing factor level identifiers
 #' @param pulse_locations A numeric vector containing index values of pulse loc.
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Parameter defined by Wierda et al. (scaling factor)
+#' @export
 WIER_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse_locations,n,t_max,f) {
   
   # Extract number of factor levels
@@ -191,6 +214,10 @@ WIER_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse
               "constraints"=constraints))
 }
 
+#' @title
+#' Alternative model template based on Wierda et al.(2012)'s model
+#'
+#' @description
 #' Creates trainings matrix and penalties for a fully penalized
 #' version of the original Wierda et al. (2012) model.
 #' Like by Wierda et al. separate sets of coefficients are estimated per
@@ -199,21 +226,22 @@ WIER_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse
 #' Wierda et al. (2012) introduced. These are not constrained - since their
 #' primary purpose was to account for drift in the pupil averages of individual
 #' subjects.
-#' 
 #' This model differs from the one by Wierda et al. (2012) in that it penalizes
 #' the coefficients corresponding to the h_basis terms. Specifically, it
-#' enforces a single penalty term shared by all subjects (e.g., this is
-#' similar to the 'fs' basis in mgcv or can be achieved by using the 'id' keyword
-#' in a 'by' factor smooth.). The form of the penalty expressed on all of the
+#' enforces a **penalty term for each individual subject** (e.g., this is
+#' similar to using the 'by' keyword in mgcv). The form of the penalty expressed on all of the
 #' basis functions is a simple identity matrix. We here also penalize all slope
-#' terms, again with a single penalty (this time applied to a single matrix though).
+#' terms, again with a single penalty.
 #' 
+#' @param expanded_time A numeric vector containing positive time values in ms, expanded by a certain amount of ms
+#' @param expand_by Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms
 #' @param time A numeric vector containing positive time values in ms
 #' @param fact A factor vector containing factor level identifiers
 #' @param pulse_locations A numeric vector containing index values of pulse loc.
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Parameter defined by Wierda et al. (scaling factor)
+#' @export
 WIER_IND_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse_locations,n,t_max,f) {
   
   # Extract number of factor levels
@@ -246,29 +274,32 @@ WIER_IND_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse_lo
               "constraints"=constraints))
 }
 
+#' @title
+#' Model template based on Denison et al.(2020)'s model investigation
+#'
+#' @description
 #' Creates trainings matrix and penalties for a fully penalized
-#' model inspired by the one used by Denison et al., (2020).
-#' Like by Wierda et al. (2012) separate sets of coefficients are estimated per
+#' version inspired by the models investigated by Denison et al. (2020).
+#' Similarly, separate sets of coefficients are estimated per
 #' subject with the h_basis terms. All those coefficients are again constrained
-#' to be non-negative. Model also includes the intercept terms for each subject that
-#' Denison et al. (2012) introduced. These are not constrained - since their
-#' primary purpose was to account for pupil trajectories that were overall just
-#' containing very negative samples (relative to baseline).
-#' 
-#' This model differs from the one by Wierda et al. (2012) and Denison et al., (2020)
-#' in that it penalizes the coefficients corresponding to the h_basis terms.
-#' Specifically, it enforces a single penalty term shared by all subjects (e.g., this is
-#' similar to the 'fs' basis in mgcv or can be achieved by using the 'id' keyword
-#' in a 'by' factor smooth.). The form of the penalty expressed on all of the
+#' to be non-negative. The model also includes an intercept/offset term for each
+#' subject as introduced by Denison et al., (2020. These are not constrained.
+#' This model again penalizes
+#' the coefficients corresponding to the h_basis terms. Specifically, it
+#' enforces a single penalty term shared by all subjects (e.g., this is
+#' similar to the 'fs' basis in mgcv). The form of the penalty expressed on all of the
 #' basis functions is a simple identity matrix. We here also penalize all intercept
-#' terms, again with a single penalty (this time applied to a single matrix though).
+#' terms, again with a single penalty.
 #' 
+#' @param expanded_time A numeric vector containing positive time values in ms, expanded by a certain amount of ms
+#' @param expand_by Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms
 #' @param time A numeric vector containing positive time values in ms
 #' @param fact A factor vector containing factor level identifiers
 #' @param pulse_locations A numeric vector containing index values of pulse loc.
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Parameter defined by Wierda et al. (scaling factor)
+#' @export
 DEN_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse_locations,n,t_max,f) {
   
   # Extract number of factor levels
@@ -301,34 +332,31 @@ DEN_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse_
               "constraints"=constraints))
 }
 
-#' Creates trainings matrix and penalties for a fully penalized
-#' model that combines elements of both the models by Denison et al., (2020)
-#' and Wierda et al. (2012).
+#' @title
+#' Model template based on Denison et al.(2020)'s model investigation and Wierda et al. (2012)'s model
 #'
+#' @description
 #' Like by Wierda et al. (2012) separate sets of coefficients are estimated per
 #' subject with the h_basis terms. All those coefficients are again constrained
-#' to be non-negative. Model also includes the intercept terms for each subject that
+#' to be non-negative. The moodel also includes the intercept terms for each subject that
 #' Denison et al. (2012) introduced as well as the slope term introduced by
-#' Wierda et al., (2012). These are not constrained - since their
-#' primary purpose was to account for pupil trajectories that were overall just
-#' containing very negative samples (relative to baseline) and drifts in the
-#' trajectories respectively.
+#' Wierda et al., (2012). These are not constrained.
 #' 
-#' This model differs from the one by Wierda et al. (2012) and Denison et al., (2020)
-#' in that it penalizes the coefficients corresponding to the h_basis terms.
+#' This model again penalizes the coefficients corresponding to the h_basis terms.
 #' Specifically, it enforces a single penalty term shared by all subjects (e.g., this is
-#' similar to the 'fs' basis in mgcv or can be achieved by using the 'id' keyword
-#' in a 'by' factor smooth.). The form of the penalty expressed on all of the
+#' similar to the 'fs' basis in mgcv). The form of the penalty expressed on all of the
 #' basis functions is a simple identity matrix. We here also penalize all intercept
-#' and slope terms, again with a single penalty
-#' (this time applied to a single matrix though).
+#' and slope terms, again with a single penalty.
 #' 
+#' @param expanded_time A numeric vector containing positive time values in ms, expanded by a certain amount of ms
+#' @param expand_by Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms
 #' @param time A numeric vector containing positive time values in ms
 #' @param fact A factor vector containing factor level identifiers
 #' @param pulse_locations A numeric vector containing index values of pulse loc.
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Parameter defined by Wierda et al. (scaling factor)
+#' @export
 WIER_DEN_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse_locations,n,t_max,f) {
   
   # Extract number of factor levels
@@ -365,7 +393,32 @@ WIER_DEN_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,p
 }
 
 
-#' The main wrapper function that is also exposed. Fits the desired model.
+#' @title
+#' Main function that fits the penalized additive pupil model.
+#'
+#' @description
+#' This function fits one of the penalized pupil models that are available with this package.
+#' @details
+#' See the artificial_data_analysis vignette for details and usage examples.
+#'
+#' @param pulse_spacing Model pulses every 'pulse_spacing' samples. Setting this to 1
+#' ensures 1 pulse every sample
+#' @param data Aggregated data with a time and pupil column. Also needs a factor column
+#' @param factor_id Name of the factor column. Model will estimate demand trajectory for each level of this factor
+#' @param model Model template.
+#' @param n Choice for parameter defined by Hoeks & Levelt (number of laters)
+#' @param t_max Choice for parameter defined by Hoeks & Levelt (response maximum in ms)
+#' @param f Choice for parameter defined by Wierda et al. (scaling factor)
+#' @param pulse_dropping_factor Last pulse is modelled at index corresponding to: length(unique(data$time)) - (pulse_dropping_factor * round(t_max/100)) - 1
+#' @param maxiter_inner Maximum steps taken by inner optimizer
+#' @param maxiter_outer Maximum steps taken by outer optimizer
+#' @param convergence_tol Convergence check to terminate early
+#' @param should_collect_progress If T, then the entire coefficient update history is collected and returned. VERY COSTLY.
+#' @param start_lambda Initial lambda value. Must be > 0 if a penalty should be used! Setting this to 0 and maxiter_outer=1, leads to estimation of an un-penalized additive model, i.e., recovers the traditional NNLS estimate used by Wierda et al. (2012) and Denison et al. (2012).
+#' @param should_accum_H Whether Hessian should be approximated using BFGS rule or not. If not, then least squares Hessian matrix is used. With the BFGS rule models ended up being much smoother in our simulations. So this should be set to true if under-smoothing is observed. However, the BFGS update is much more costly and takes much more time!
+#' @param init_cf NULL or vector with initial coefficient estimate
+#' @param expand_by Time in ms by which to expand the time-series in the past. Then pulses that happened before the recorded time-window can still be approximated! See artificial_data_analysis vignette for details.
+#' @param sample_length Duration in ms of a single sample. If pupil dilation time-course was down-sampled to 50HZ, set this to 20
 #' @export
 pupil_solve <- function(pulse_spacing,
                         data,
@@ -474,11 +527,28 @@ pupil_solve <- function(pulse_spacing,
               "fitted"= setup$X %*% solved_pup$coefficients))
 }
 
+#' @title
+#' Boostrap estimate of standard error
+#'
+#' @description
 #' Bootstrap estimate of the standard error in the pulse weights. Calculation
 #' is based on the "bootstrapping residuals" approach presented in chapter 9
 #' of "An introduction to the Bootstrap" by Efron & Tribshirani. Algorithm 6.1
 #' for calculating standard error estimates based on bootstrap samples
 #' from chapter 6 is used for the actual calculations.
+#' @param cf Coefficients recovered by papss::pupil_solve()
+#' @param pupil_var Pupil column from aggregated data frame
+#' @param setup Model setup object returned by papss::pupil_solve()
+#' @param warm_start Whether or not to re-use cf - if F then coefficients are estimated from scratch for every bootstrap sample
+#' @param N Number of repetitions for boot-strapping
+#' @param n Choice for parameter defined by Hoeks & Levelt (number of laters)
+#' @param t_max Choice for parameter defined by Hoeks & Levelt (response maximum in ms)
+#' @param f Choice for parameter defined by Wierda et al. (scaling factor)
+#' @param maxiter_inner Maximum steps taken by inner optimizer
+#' @param maxiter_outer Maximum steps taken by outer optimizer
+#' @param convergence_tol Convergence check to terminate early
+#' @param start_lambda Initial lambda value. Must be > 0 if a penalty should be used! Setting this to 0 and maxiter_outer=1, leads to estimation of an un-penalized additive model, i.e., recovers the traditional NNLS estimate used by Wierda et al. (2012) and Denison et al. (2012).
+#' @param should_accum_H Whether Hessian should be approximated using BFGS rule or not. If not, then least squares Hessian matrix is used. With the BFGS rule models ended up being much smoother in our simulations. So this should be set to true if under-smoothing is observed. However, the BFGS update is much more costly and takes much more time!
 #' @export
 bootstrap_papss_standard_error <- function(cf,
                                            pupil_var,
@@ -559,6 +629,10 @@ bootstrap_papss_standard_error <- function(cf,
               "individualParams"=B_b))
 }
 
+#' @title
+#' Cross-validation for t_max estimation
+#'
+#' @description
 #' Denison et al. (2020) report large variance in the optimal t_max parameters
 #' between subjects. This function can thus be used to recover the optimal parameter
 #' for subjects using cross-validation. The same procedure utilized by Denison et
@@ -568,12 +642,33 @@ bootstrap_papss_standard_error <- function(cf,
 #' cycles through the entire data-set resulting in n repetitions and n cross-validation errors.
 #' The average cross-validation error for a specific t_max is then reported.
 #' 
+#' @details
 #' Note that different forms of cross-validation are possible depending on the
 #' experimental design and one's assumptions. It is possible to optimize t_max for
 #' each subject for each condition individually (then only data from one subject and
 #' one condition should be passed to the function) or across conditions (then data from
 #' all conditions should be passed to the function). Based on the findings by Denison
 #' et al. (2020), the latter is likely sufficient and more appropriate.
+#'
+#' @param cand_tmax vector with all t_max values to be considered
+#' @param folds list of vectors, each vector corresponds to fold and contains trial values to be held-out in that fold!
+#' @param pulse_spacing Model pulses every 'pulse_spacing' samples. Setting this to 1
+#' ensures 1 pulse every sample
+#' @param trial_data trial-level data with a time and pupil column. Also needs a factor column
+#' @param factor_id Name of the factor column. Model will estimate demand trajectory for each level of this factor
+#' @param model Model template.
+#' @param n Choice for parameter defined by Hoeks & Levelt (number of laters)
+#' @param t_max Choice for parameter defined by Hoeks & Levelt (response maximum in ms)
+#' @param f Choice for parameter defined by Wierda et al. (scaling factor)
+#' @param pulse_dropping_factor Last pulse is modelled at index corresponding to: length(unique(data$time)) - (pulse_dropping_factor * round(t_max/100)) - 1
+#' @param maxiter_inner Maximum steps taken by inner optimizer
+#' @param maxiter_outer Maximum steps taken by outer optimizer
+#' @param convergence_tol Convergence check to terminate early
+#' @param start_lambda Initial lambda value. Must be > 0 if a penalty should be used! Setting this to 0 and maxiter_outer=1, leads to estimation of an un-penalized additive model, i.e., recovers the traditional NNLS estimate used by Wierda et al. (2012) and Denison et al. (2012).
+#' @param should_accum_H Whether Hessian should be approximated using BFGS rule or not. If not, then least squares Hessian matrix is used. With the BFGS rule models ended up being much smoother in our simulations. So this should be set to true if under-smoothing is observed. However, the BFGS update is much more costly and takes much more time!
+#' @param init_cf NULL or vector with initial coefficient estimate
+#' @param expand_by Time in ms by which to expand the time-series in the past. Then pulses that happened before the recorded time-window can still be approximated! See artificial_data_analysis vignette for details.
+#' @param sample_length Duration in ms of a single sample. If pupil dilation time-course was down-sampled to 50HZ, set this to 20
 #' @export
 cross_val_tmax <- function(cand_tmax,
                         folds,

@@ -2,8 +2,7 @@
 % Please edit documentation in R/model_setup_helpers.R
 \name{term_by_factor}
 \alias{term_by_factor}
-\title{Achieves "by" keyword functionality used in mgcv to enable by-factor
-smooths (see. Wood, 2017).}
+\title{Achieves "by" keyword functionality}
 \usage{
 term_by_factor(term, fact)
 }
@@ -13,11 +12,11 @@ term_by_factor(term, fact)
 \item{fact}{A factor variable.}
 }
 \description{
-See: Wood, S. N. (2017). Generalized Additive Models: An Introduction with R,
-Second Edition (2nd ed.). Chapman and Hall/CRC.
+Used in mgcv to enable by-factor smooths!
 }
 \details{
+See: Wood, S. N. (2017). Generalized Additive Models: An Introduction with R,
+Second Edition (2nd ed.). Chapman and Hall/CRC.
 See 'by' at: https://www.rdocumentation.org/packages/mgcv/versions/1.8-38/topics/s
-
 Code is based on: https://stats.stackexchange.com/questions/110472/how-exactly-is-the-sum-or-mean-centering-constraint-for-splines-also-w-r-t-g
 }

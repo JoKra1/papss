@@ -2,8 +2,7 @@
 % Please edit documentation in R/model_setup_helpers.R
 \name{create_constant_term}
 \alias{create_constant_term}
-\title{Creates a single intercept term (at the population level).
-Can be manipulated via "by" argument as done in mgcv.}
+\title{Creates a single intercept term (at the population level).}
 \usage{
 create_constant_term(time)
 }
@@ -11,6 +10,5 @@ create_constant_term(time)
 \item{time}{A numeric vector containing positive time values in ms}
 }
 \description{
-Creates a single intercept term (at the population level).
 Can be manipulated via "by" argument as done in mgcv.
 }

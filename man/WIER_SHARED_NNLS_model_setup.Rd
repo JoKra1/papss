@@ -2,21 +2,27 @@
 % Please edit documentation in R/model_setup_helpers.R
 \name{WIER_SHARED_NNLS_model_setup}
 \alias{WIER_SHARED_NNLS_model_setup}
-\title{Creates trainings matrix and penalties for a fully penalized
-version of the original Wierda et al. (2012) model.
-Like by Wierda et al. separate sets of coefficients are estimated per
-subject with the h_basis terms. All those coefficients are again constrained
-to be non-negative. Model also includes the slope terms for each subject that
-Wierda et al. (2012) introduced. These are not constrained - since their
-primary purpose was to account for drift in the pupil averages of individual
-subjects.}
+\title{Model template based on Wierda et al.(2012)'s model}
 \usage{
-WIER_SHARED_NNLS_model_setup(time, subs, pulse_locations, n, t_max, f)
+WIER_SHARED_NNLS_model_setup(
+  expanded_time,
+  expand_by,
+  time,
+  fact,
+  pulse_locations,
+  n,
+  t_max,
+  f
+)
 }
 \arguments{
+\item{expanded_time}{A numeric vector containing positive time values in ms, expanded by a certain amount of ms}
+
+\item{expand_by}{Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms}
+
 \item{time}{A numeric vector containing positive time values in ms}
 
-\item{subs}{A factor vector containing subject identifiers}
+\item{fact}{A factor vector containing factor level identifiers}
 
 \item{pulse_locations}{A numeric vector containing index values of pulse loc.}
 
@@ -27,11 +33,18 @@ WIER_SHARED_NNLS_model_setup(time, subs, pulse_locations, n, t_max, f)
 \item{f}{Parameter defined by Wierda et al. (scaling factor)}
 }
 \description{
+Creates trainings matrix and penalties for a fully penalized
+version of the original Wierda et al. (2012) model.
+Like by Wierda et al. separate sets of coefficients are estimated per
+subject with the h_basis terms. All those coefficients are again constrained
+to be non-negative. Model also includes the slope terms for each subject that
+Wierda et al. (2012) introduced. These are not constrained - since their
+primary purpose was to account for drift in the pupil averages of individual
+subjects.
 This model differs from the one by Wierda et al. (2012) in that it penalizes
 the coefficients corresponding to the h_basis terms. Specifically, it
 enforces a single penalty term shared by all subjects (e.g., this is
-similar to the 'fs' basis in mgcv or can be achieved by using the 'id' keyword
-in a 'by' factor smooth.). The form of the penalty expressed on all of the
+similar to the 'fs' basis in mgcv). The form of the penalty expressed on all of the
 basis functions is a simple identity matrix. We here also penalize all slope
-terms, again with a single penalty (this time applied to a single matrix though).
+terms, again with a single penalty.
 }

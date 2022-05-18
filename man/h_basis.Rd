@@ -4,10 +4,14 @@
 \alias{h_basis}
 \title{Create "basis-functions" that make up the pupil spline.}
 \usage{
-h_basis(i, time, pulse_locations, n, t_max, f)
+h_basis(i, expanded_time, expand_by, time, pulse_locations, n, t_max, f)
 }
 \arguments{
 \item{i}{An integer representing index of a basis function.}
+
+\item{expanded_time}{A numeric vector containing positive time values in ms, expanded by a certain amount of ms}
+
+\item{expand_by}{Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms}
 
 \item{time}{A numeric vector containing positive time values in ms}
 
@@ -33,7 +37,6 @@ Pupil dilation deconvolution reveals the dynamics of attention at high
 temporal resolution. Proceedings of the National Academy of Sciences of
 the United States of America, 109(22), 8456–8460.
 https://doi.org/10.1073/pnas.1201858109
-
 See: Hoeks, B., & Levelt, W. (1993). Pupillary dilation as a measure of
 attention: A quantitative system analysis.
 Behav. Res. Meth. Ins. C., 25, 16–26.

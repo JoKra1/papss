@@ -2,7 +2,7 @@
 % Please edit documentation in R/pupil_sim_helpers.R
 \name{additive_pupil_sim}
 \alias{additive_pupil_sim}
-\title{Simulate pupil data to test the functionality offered by this package}
+\title{Simulate pupil data to test papss}
 \usage{
 additive_pupil_sim(
   nk = 20,
@@ -57,14 +57,19 @@ additive_pupil_sim(
 Uses the pupil response function described by Hoeks & Levelt (1993)
 with the refinements proposed by Wierda e t al. (2012) to simulate pupil
 dilation time-course data with three sources of deviation:
+\enumerate{
+\item Simulates systematic per-subject deviation from a 'shared' population trend in demand
+\item Simulates per-trial deviation from each subject's individual 'true demand'
+\item Assumes random noise (N(0, sigma), with constant sigma) for each trial
+}
 }
 \details{
-1) Simulates systematic per-subject deviation from a 'shared' population trend in demand
-2) Simulates per-trial deviation from each subject's individual 'true demand'
-3) Assumes random noise (N(0, sigma), with constant sigma) for each trial
-
 Demand is modelled according to a simple B-spline (see Eilers & Marx, 2010)
 with equally spaced knots with associated coefficients of which only a small
 percentage will be different from zero (to ensure that the simulated demand
 trajectory is sparse).
+}
+\examples{
+pupil_sim <- additive_pupil_sim(n_sub=5)
+sim_dat <- pupil_sim$data
 }

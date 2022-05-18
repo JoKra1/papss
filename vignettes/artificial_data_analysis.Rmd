@@ -486,7 +486,14 @@ gam.check(m1)
 
 # Final remarks
 
-`papss` offers multiple model setups, not just one inspired by Wierda et al.'s setup (i.e., with extra slope terms). Dension et al. (2020) for example included intercept terms for each subject, and setting `model="DEN_SHARED"` will  similarly estimate intercept terms instead of slope terms, while setting `model=WIER_DEN_SHARED` will estimate both intercept and slope terms for each subject.
+`papss` offers multiple model setups, not just one inspired by Wierda et al.'s setup (i.e., with extra slope terms). Dension et al. (2020) for example included intercept terms for each subject, and setting `model="DEN_SHARED"` will  similarly estimate intercept terms instead of slope terms, while setting `model=WIER_DEN_SHARED` will estimate both intercept and slope terms for each subject. See:
+
+```{r, eval=F, echo=T}
+help(WIER_SHARED_NNLS_model_setup)
+help(WIER_IND_NNLS_model_setup)
+help(DEN_SHARED_NNLS_model_setup)
+help(WIER_DEN_SHARED_NNLS_model_setup)
+```
 
 
 # References

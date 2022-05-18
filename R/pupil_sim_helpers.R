@@ -11,17 +11,20 @@ get_knots <- function(xl, xr, ndx, bdeg) {
   return(knots)
 }
 
-
-#' Simulate pupil data to test the functionality offered by this package
+#' @title 
+#' Simulate pupil data to test papss
 #'
+#' @description 
 #' Uses the pupil response function described by Hoeks & Levelt (1993)
 #' with the refinements proposed by Wierda e t al. (2012) to simulate pupil
 #' dilation time-course data with three sources of deviation:
+#' \enumerate{
+#' \item Simulates systematic per-subject deviation from a 'shared' population trend in demand
+#' \item Simulates per-trial deviation from each subject's individual 'true demand'
+#' \item Assumes random noise (N(0, sigma), with constant sigma) for each trial
+#' }
 #' 
-#' 1) Simulates systematic per-subject deviation from a 'shared' population trend in demand
-#' 2) Simulates per-trial deviation from each subject's individual 'true demand'
-#' 3) Assumes random noise (N(0, sigma), with constant sigma) for each trial
-#' 
+#' @details
 #' Demand is modelled according to a simple B-spline (see Eilers & Marx, 2010)
 #' with equally spaced knots with associated coefficients of which only a small
 #' percentage will be different from zero (to ensure that the simulated demand
@@ -42,6 +45,10 @@ get_knots <- function(xl, xr, ndx, bdeg) {
 #' @param f Parameter defined by Wierda et al. (scaling factor)
 #' @param should_plot Whether the generated data should be visualized.
 #' @param seed For replicability
+#' 
+#' @examples 
+#' pupil_sim <- additive_pupil_sim(n_sub=5)
+#' sim_dat <- pupil_sim$data
 #' @export
 additive_pupil_sim <- function(nk=20,
                                n_sub=10,
@@ -271,14 +278,25 @@ additive_pupil_sim <- function(nk=20,
               "data"=sim_dat))
 }
 
-#' Plot simulated pupil data against recovered weights. Only works for
-#' model setup like the one by Wierda et al. (2012).
+#' @title 
+#' Plot simulated pupil data against recovered weights.
+#' 
+#' @description
+#' Only works for model setup like the one by Wierda et al. (2012).
+#' 
 #' @param n_sub How many subjects were simulate.
 #' @param aggr_dat Aggregated simulation data
 #' @param sim_obj The list returned by additive_pupil_sim
 #' @param recovered_coef The coefficients returned by papss:pupil_solve()
-#' @param pulse_locations The index vector pointing at pulse locations passed to papss:pupil_solve()
-#' @param real_locations The vector with the time-points at which pulses are assumed passed to papss:pupil_solve()
+#' @param pulse_locations The index vector pointing at pulse locations passed to papss::pupil_solve()
+#' @param real_locations The vector with the time-points at which pulses are assumed passed to papss::pupil_solve()
+#' @param pulses_in_time Boolean vector indicating which pulse was within the time-window. Returned by papss::pupil_solve()
+#' @param expanded_time The expanded time series returned by papss:pupil_solve()
+#' @param expanded_by Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms
+#' @param f_est f parameter value
+#' @param scaling_factor A scaling factor to scale up or down the demand signal
+#' @param se NULL or list with standard errors recovered for each subject
+#' @param plot_avg Whether to plot average or not
 #' @export
 plot_sim_vs_recovered <- function(n_sub,
                                   aggr_dat,
@@ -394,14 +412,23 @@ plot_sim_vs_recovered <- function(n_sub,
   }
 }
 
+#'@title
+#' Extracts demand curves
+#'
+#' @description
 #' Extracts demand curves for each level of the factor passed to the pupil_solve
 #' call.
-#' @param n_fact How many levels does the factor have.
 #' @param aggr_dat Aggregated data passed to solver
-#' @param sim_obj The list returned by additive_pupil_sim
-#' @param recovered_coef The coefficients returned by papss:pupil_solve()
-#' @param pulse_locations The index vector pointing at pulse locations passed to papss:pupil_solve()
-#' @param real_locations The vector with the time-points at which pulses are assumed passed to papss:pupil_solve()
+#' @param recovered_coef The coefficients returned by papss::pupil_solve()
+#' @param pulse_locations The index vector pointing at pulse locations passed to papss::pupil_solve()
+#' @param real_locations The vector with the time-points at which pulses are assumed passed to papss::pupil_solve()
+#' @param pulses_in_time Boolean vector indicating which pulse was within the time-window. Returned by papss::pupil_solve()
+#' @param expanded_time The expanded time series returned by papss::pupil_solve()
+#' @param expanded_by Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms
+#' @param factor_id Name of factor column in aggr_dat
+#' @param n_fact Choice for n parameter
+#' @param t_max_fact Choice for t_max parameter
+#' @param f_fact Choice for f parameter
 #' @export
 extract_demand_for_fact <- function(aggr_dat,
                                     recovered_coef,

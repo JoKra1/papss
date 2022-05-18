@@ -2,7 +2,7 @@
 % Please edit documentation in R/pupil_sim_helpers.R
 \name{plot_sim_vs_recovered}
 \alias{plot_sim_vs_recovered}
-\title{Plot simulated pupil data against recovered weights}
+\title{Plot simulated pupil data against recovered weights.}
 \usage{
 plot_sim_vs_recovered(
   n_sub,
@@ -10,7 +10,14 @@ plot_sim_vs_recovered(
   sim_obj,
   recovered_coef,
   pulse_locations,
-  real_locations
+  real_locations,
+  pulses_in_time,
+  expanded_time,
+  expanded_by,
+  f_est = 1/(10^24),
+  scaling_factor = 1,
+  se = NULL,
+  plot_avg = T
 )
 }
 \arguments{
@@ -22,10 +29,24 @@ plot_sim_vs_recovered(
 
 \item{recovered_coef}{The coefficients returned by papss:pupil_solve()}
 
-\item{pulse_locations}{The index vector pointing at pulse locations passed to papss:pupil_solve()}
+\item{pulse_locations}{The index vector pointing at pulse locations passed to papss::pupil_solve()}
 
-\item{real_locations}{The vector with the time-points at which pulses are assumed passed to papss:pupil_solve()}
+\item{real_locations}{The vector with the time-points at which pulses are assumed passed to papss::pupil_solve()}
+
+\item{pulses_in_time}{Boolean vector indicating which pulse was within the time-window. Returned by papss::pupil_solve()}
+
+\item{expanded_time}{The expanded time series returned by papss:pupil_solve()}
+
+\item{expanded_by}{Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms}
+
+\item{f_est}{f parameter value}
+
+\item{scaling_factor}{A scaling factor to scale up or down the demand signal}
+
+\item{se}{NULL or list with standard errors recovered for each subject}
+
+\item{plot_avg}{Whether to plot average or not}
 }
 \description{
-Plot simulated pupil data against recovered weights
+Only works for model setup like the one by Wierda et al. (2012).
 }

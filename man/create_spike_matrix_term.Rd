@@ -2,14 +2,23 @@
 % Please edit documentation in R/model_setup_helpers.R
 \name{create_spike_matrix_term}
 \alias{create_spike_matrix_term}
-\title{Create basis part of the model matrix as described by Wood (2017).
-Essentially, this means creating a matrix with a column for each
-pulse location and to assign a pupil basis (convolved with that location)
-to each column.}
+\title{Create basis part of the model matrix as described by Wood (2017).}
 \usage{
-create_spike_matrix_term(time, pulse_locations, n, t_max, f)
+create_spike_matrix_term(
+  expanded_time,
+  expand_by,
+  time,
+  pulse_locations,
+  n,
+  t_max,
+  f
+)
 }
 \arguments{
+\item{expanded_time}{A numeric vector containing positive time values in ms, expanded by a certain amount of ms}
+
+\item{expand_by}{Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms}
+
 \item{time}{A numeric vector containing positive time values in ms}
 
 \item{pulse_locations}{A numeric vector containing index values of pulse loc.}
@@ -21,6 +30,11 @@ create_spike_matrix_term(time, pulse_locations, n, t_max, f)
 \item{f}{Parameter defined by Wierda et al. (scaling factor)}
 }
 \description{
+Essentially, this means creating a matrix with a column for each
+pulse location and to assign a pupil basis (convolved with that location)
+to each column.
+}
+\details{
 See: Wood, S. N. (2017). Generalized Additive Models: An Introduction with R,
 Second Edition (2nd ed.). Chapman and Hall/CRC.
 }
