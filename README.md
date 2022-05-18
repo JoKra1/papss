@@ -28,8 +28,7 @@ remotes::install_github("JoKra1/papss",build_vignettes = T)
 ```
 
 Note that building the vignette might take some time, since the solver is used on artificial data generated
-for 15 subjects. Once the installation has been completed, you can inspect the vignette using
-one of the following commands:
+for 15 subjects. Thus, if you just want the code examples and are fine with reading the vignette in raw mark-down you might want to look at them in the /vignettes folder instead of building them when installing the package. Once the installation has been completed, you can inspect the vignette using one of the following commands:
 
 ```
 browseVignettes() # Search for 'papss'

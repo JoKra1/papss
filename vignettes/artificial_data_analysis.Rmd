@@ -30,13 +30,13 @@ set.seed(2022) # For replicability.
 
 ## Introduction
 
-Hoeks & Levelt (1993) investigated the characteristics of the function relating an increase in 'cognitive demand' to a change in the dilation of the pupil. They revealed that this function is best modeled using a Gamma-Erlang function. They also determined optimal general values for the parameters associated with the latter experimentally. You can check the documentation of the *h_basis* function if you want to know more (or read their paper!):
+Hoeks & Levelt (1993) investigated the characteristics of the function relating an increase in 'cognitive demand' to a change in the dilation of the pupil. They revealed that this relationship is best modeled using a Gamma-Erlang function. They also determined optimal general values for the parameters associated with the latter experimentally. You can check the documentation of the *h_basis* function if you want to know more (or read their paper!):
 
 ```{r, eval=F, echo=T}
 help(h_basis)
 ```
 
-In their original work they really focused on isolated 'demand spikes' linked to clearly identifiable events in their experiment setup. Below we visualize their 'pupil-response function':
+In their original work they really focused on isolated 'demand spikes' linked to clearly identifiable events in their experiment. Below we visualize their 'pupil-response function':
 
 ```{r}
 # First we create a time variable.
@@ -112,7 +112,7 @@ lines(time,pupil,lwd=3)
 betas <- c(0.3,betas)
 ```
 
-``papss`` tries to find the set of weights that most likely generated an observed pupil dilation time-course! However, ``papss`` is not limited to the assumption made by Hoeks & Levelt that there are only a couple of isolated spikes. Rather, it attempts to recover **continuous changes in the underlying demand trajectory**. The idea that demand changes continuously traces back to the work by Wierda and colleagues who revealed that they can track more continuous-like changes in demand with "spikes" assumed to happen every 100 ms. ``papss`` goes one step further and models truly continuous changes in demand, with "spikes" at every measured sample. This document provides instructions on how ``papss`` can be used for an analysis of the pupil dilation time-course.
+``papss`` tries to find the set of weights that most likely generated an observed pupil dilation time-course! However, ``papss`` is not limited to the assumption made by Hoeks & Levelt that there are only a couple of isolated spikes. Rather, it attempts to recover **continuous changes in the underlying demand trajectory**. The idea that demand changes continuously traces back to the work by Wierda and colleagues who revealed that they can track more continuous-like changes in demand with "spikes" assumed to happen every 100 ms. ``papss`` goes one step further and models truly continuous changes in demand, with possible "spikes" at every measured sample. This document provides instructions on how ``papss`` can be used for an analysis of the pupil dilation time-course.
 
 ## Simulate Pupil Data
 
@@ -156,11 +156,11 @@ for (si in 2:n) {
 
 ## Defining possible pulse locations
 
-Based on the findings by Wierda et al. (2012), that demand changes more like a continuous signal, the most sensible assumption regarding 'spike locations' is to assume a possible demand spike at every pupil sample (i.e., every 20 ms in case the observed pupil dilatiopn time-course was down-sampled to 50 HZ). ``papss`` automatically calculates the possible locations, the spacing between spikes is controlled via the `pulse_spacing` argument. As argued before, this should usually be set to 1 (i.e., a "spike" every sample, a 2 would mean a "spike" every two samples. If the pupil dilation time-course is down-sampled to 50 HZ, then setting this to 5 leads to the spacing used by Wierda et al. in 2012).
+``papss`` automatically calculates possible demand-spike locations. The spacing between spikes is controlled via the `pulse_spacing` argument. As argued before, this should usually be set to 1 (i.e., a "spike" every sample, a 2 would mean a "spike" every two samples. If the pupil dilation time-course is down-sampled to 50 HZ, then setting this to 5 leads to the spacing used by Wierda et al. in 2012).
 
 ``papss`` also attempts to correct for pulses that happened before the recording window! In the simulation here, demand really starts to increase only within the time-window of interest. However, this is often difficult with real data. It might be that already before stimulus onset, demand fluctuates. Because of the lagged pupil response, pulses outside of the time-window (here pulses before time-point 0) will then still influence the pupil response within the time-window of interest. ``papss`` by default tries to correct for this possibility, by modelling truncated pupil basis response functions that would originate from pulses within 500 ms before the time-window of interest (controlled via the `expand_by` argument). As discussed by Wierda et al., pulses far towards the end of the time-window are often over-estimated as well, and by default ``papss`` thus drops some of those (controlled via `pulse_dropping_factor`). Increasing the amount of dropped pulses, obviously frees more basis functions that can be dedicated to account for baseline fluctuations, so in practice researchers will usually have to find a good balancing act here. ``papss`` will prompt a warning and cancel estimation, in case the problem becomes unidentifiable.
 
-Finally, the aforementioned scaling parameter `f` of the pupil response function, introduced by Wierda et al. is generally not known. The choice for this parameter depends largely on the selected pre-processing pipeline and the eye-tracker used for recording. For example, Wierda et al. (2012) used normalized pupil dilation time-courses. In that case a value of (1/(10^(27))) worked quite well. The simulation here generates data that is more in line with data that was only base-lined by means of subtraction. We achieved good results with a value of (1/(10^(24))) in that case. Recovering the precise value is also not crucial, since the shape of the pattern will still be recovered, up to a difference in a scaling factor!
+Finally, the aforementioned scaling parameter `f` of the pupil response function, introduced by Wierda et al. is generally not known. The choice for this parameter depends largely on the selected pre-processing pipeline and the eye-tracker used for recording. For example, Wierda et al. (2012) used normalized pupil dilation time-courses. In that case a value of (1/(10^(27))) worked quite well. The simulation here generates data that is more in line with data that was base-lined by means of subtraction. We achieved good results with a value of (1/(10^(24))) in that case. Recovering the precise value is also not crucial, since the shape of the pattern will still be recovered, up to a difference in a scaling factor!
 
 ## Estimating demand
 
@@ -240,7 +240,7 @@ estimates, recovered below, to be trusted.
 bootstrap <- papss::bootstrap_papss_standard_error(solvedPupil$coef,
                                                    aggr_dat$pupil,
                                                    solvedPupil$setup,
-                                                   N=25, # This should be higher in practice!
+                                                   N=10, # This should be higher in practice!
                                                    maxiter_inner = 100000,
                                                    maxiter_outer = 10,
                                                    f=(1/(10^(24))))
@@ -343,7 +343,7 @@ difference between condition A and condition B as well as the difference between
 
 This setup is outlined in the code example below:
 
-```{r}
+```{r, eval=F, echo=T}
 # First build condition dat
 condDat <- NULL
 n <- 15
