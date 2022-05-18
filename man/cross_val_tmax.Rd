@@ -21,7 +21,8 @@ cross_val_tmax(
   should_accum_H = F,
   init_cf = NULL,
   expand_by = 800,
-  sample_length = 20
+  sample_length = 20,
+  should_plot = T
 )
 }
 \arguments{
@@ -59,6 +60,8 @@ ensures 1 pulse every sample}
 \item{expand_by}{Time in ms by which to expand the time-series in the past. Then pulses that happened before the recorded time-window can still be approximated! See artificial_data_analysis vignette for details.}
 
 \item{sample_length}{Duration in ms of a single sample. If pupil dilation time-course was down-sampled to 50HZ, set this to 20}
+
+\item{should_plot}{Whether or not fit plots should be generated as well.}
 
 \item{t_max}{Choice for parameter defined by Hoeks & Levelt (response maximum in ms)}
 }

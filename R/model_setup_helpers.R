@@ -669,6 +669,7 @@ bootstrap_papss_standard_error <- function(cf,
 #' @param init_cf NULL or vector with initial coefficient estimate
 #' @param expand_by Time in ms by which to expand the time-series in the past. Then pulses that happened before the recorded time-window can still be approximated! See artificial_data_analysis vignette for details.
 #' @param sample_length Duration in ms of a single sample. If pupil dilation time-course was down-sampled to 50HZ, set this to 20
+#' @param should_plot Whether or not fit plots should be generated as well.
 #' @export
 cross_val_tmax <- function(cand_tmax,
                         folds,
@@ -686,7 +687,8 @@ cross_val_tmax <- function(cand_tmax,
                         should_accum_H=F,
                         init_cf = NULL,
                         expand_by = 800,
-                        sample_length = 20){
+                        sample_length = 20,
+                        should_plot=T){
   
   # Collect cross-validation errors
   errs <- c()
@@ -749,6 +751,25 @@ cross_val_tmax <- function(cand_tmax,
       
       # Update average error
       sqrt_err <- sqrt_err + ((nrow(held_out_dat)/nrow(trial_data)) * sum_sqrt_res)
+      
+      if(should_plot){
+        plot(1:nrow(model_mat),
+             aggr_remaining$pupil,
+             type="l",lwd=3,
+             xlab="Index",
+             ylab="Pupil dilation")
+        lines(1:nrow(model_mat),
+              model_mat %*% recovered_coef,
+              lwd=3,
+              col= "red",
+              lty=2)
+        lines(1:nrow(model_mat),
+              aggr_held_out$pupil,
+              lty=3,
+              col="blue")
+        legend("topleft",c("Remaining pupil","Predicted pupil","Held-out pupil"),
+               lty = c(1,2,3),col=c("black","red","blue"),lwd = 3)
+      }
       
 
     }
