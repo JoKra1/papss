@@ -41,7 +41,7 @@ ensures 1 pulse every sample}
 
 \item{n}{Choice for parameter defined by Hoeks & Levelt (number of laters)}
 
-\item{f}{Choice for parameter defined by Wierda et al. (scaling factor)}
+\item{f}{Choice for parameter defined by Wierda et al. (scaling factor), can also be a vector with values for each t_max candidate}
 
 \item{pulse_dropping_factor}{Last pulse is modelled at index corresponding to: length(unique(data$time)) - (pulse_dropping_factor * round(t_max/100)) - 1}
 

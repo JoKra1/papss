@@ -659,7 +659,7 @@ bootstrap_papss_standard_error <- function(cf,
 #' @param model Model template.
 #' @param n Choice for parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Choice for parameter defined by Hoeks & Levelt (response maximum in ms)
-#' @param f Choice for parameter defined by Wierda et al. (scaling factor)
+#' @param f Choice for parameter defined by Wierda et al. (scaling factor), can also be a vector with values for each t_max candidate
 #' @param pulse_dropping_factor Last pulse is modelled at index corresponding to: length(unique(data$time)) - (pulse_dropping_factor * round(t_max/100)) - 1
 #' @param maxiter_inner Maximum steps taken by inner optimizer
 #' @param maxiter_outer Maximum steps taken by outer optimizer
@@ -694,9 +694,16 @@ cross_val_tmax <- function(cand_tmax,
   errs <- c()
   
   # Loop over all t_max candidates
-  for (tmc in cand_tmax){
+  for (tmc_i in 1:length(cand_tmax)){
     
     sqrt_err <- 0
+    
+    tmc <- cand_tmax[tmc_i]
+    fc <- f
+    
+    if(length(f) > 1) {
+      fc <- f[tmc_i]
+    }
     
     # Now handle each fold
     for (fold in folds) {
@@ -728,7 +735,7 @@ cross_val_tmax <- function(cand_tmax,
                                  model,
                                  n,
                                  t_max=tmc,
-                                 f,
+                                 fc,
                                  pulse_dropping_factor,
                                  maxiter_inner,
                                  maxiter_outer,
