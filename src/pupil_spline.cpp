@@ -326,7 +326,7 @@ void agdTOptimize(Eigen::VectorXd &cf,
             ai = a0;
         }
         */
-
+        
         // Crude convergence check.
         double absErrDiff = errDot > prevErr ? errDot - prevErr : prevErr - errDot;
         if (absErrDiff < tol)
