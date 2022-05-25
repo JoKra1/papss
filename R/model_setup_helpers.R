@@ -716,8 +716,6 @@ cross_val_tmax <- function(cand_tmax,
                                  by=list("factor"=held_out_dat[,colnames(held_out_dat) == factor_id],
                                          "time"=held_out_dat$time),FUN=mean)
       
-      aggr_held_out <- aggr_held_out[order(aggr_held_out$factor),]
-      
       # This is the remaining data on which the model is fitted.
       remaining_dat <- trial_data[!(trial_data$num_trial %in% fold),]
       
@@ -726,6 +724,20 @@ cross_val_tmax <- function(cand_tmax,
                                   by=list("factor"=remaining_dat[,colnames(remaining_dat) == factor_id],
                                           "time"=remaining_dat$time),FUN=mean)
       
+      # Check that all data-points exist in both sets.
+      aggr_held_out$timeCond <- interaction(aggr_held_out$time,aggr_held_out$factor)
+      aggr_remaining$timeCond <- interaction(aggr_remaining$time,aggr_remaining$factor)
+      
+      # If one is missing completely in held-out set, just set that one to the 
+      # from remaining set.
+      if(nrow(aggr_held_out) < nrow(aggr_remaining)){
+        cat("Warning: held-out set has ", nrow(aggr_remaining)- nrow(aggr_held_out), "time-points less. Assigning missing ones from remaining set.\n")
+        aggr_held_out <- rbind(aggr_held_out,aggr_remaining[!(aggr_remaining$timeCond %in% aggr_held_out$timeCond),])
+        cat("Now, nrow(held-out) == ", nrow(aggr_held_out), " nrow(remaining) == ", nrow(aggr_remaining), ".\n")
+      }
+      
+      # Sort data correctly
+      aggr_held_out <- aggr_held_out[order(aggr_held_out$factor),]
       aggr_remaining <- aggr_remaining[order(aggr_remaining$factor),]
       
       # Solve pupil model
@@ -751,7 +763,8 @@ cross_val_tmax <- function(cand_tmax,
       model_mat <- solvedPupil$modelmat
       
       # Calculate held-out residuals
-      res <- aggr_held_out$pupil - model_mat %*% recovered_coef
+      pred <- model_mat %*% recovered_coef
+      res <- aggr_held_out$pupil - pred
       
       # And squared error
       sum_sqrt_res <- sum(res**2)
