@@ -278,10 +278,20 @@ for (sub in unique(aggr_dat$subject)) {
 
 ## Parameter confidence
 
-To get an estimate of parameter confidence we can rely on bootstrapping
-(Efron & Tibshirani, 1993). ``papss`` supports residual replacing only. As discussed by
-Efron & Tibshirani, this requires evaluating the residuals generated for our data
-carefully:
+``papss`` essentially estimates an additive model of pupil dilation:
+
+$pupil_i = pupilSpline_i + \epsilon_i$
+
+The $pupilSpline$ corresponds to the sum of weighted pupil response functions!
+Thus, we also expect that the $\epsilon_i$ are normally distributed:
+
+$\epsilon_i \in N(0, \sigma_e)$
+
+This becomes important when we want to get an estimate of
+parameter confidence using bootstrapping (Efron & Tibshirani, 1993).
+``papss`` supports residual replacing only and as discussed by
+Efron & Tibshirani, this requires evaluating the residuals carefully to ensure
+that they match the model that we would expect:
 
 ```{r}
 plot(solvedPupil$fitted,
@@ -338,18 +348,14 @@ for (sub in unique(aggr_dat$subject)) {
 
 So far we simply used the parameters for the pupil response function provided by
 Hoeks & Levelt (1996): ``t_max=930`` and  ``n=10.1``. In practice, these values are
-good starting points but they are unlikely to be perfect. Denison et al., (2020) for
-example reported that the former varied a lot between different subjects, but was relatively
-stable across different tasks. They thus recommend that ``t_max`` should generally be estimated
-as well. ``papss`` includes a cross-validation function based on the procedure recommended by
-the authors to achieve this.
+good starting points but they are unlikely to be perfect!
 
-In this case, the true ``t_max`` used in the simulation is
-recovered by this data-driven approach as well. Note that in practice, the
-procedure should not be applied to data from multiple subjects. This worked
-here because the simulation assumed a single shared ``t_max``. In practice, it would be more
-appropriate to determine the parameter for each subject, using the data from all experimental
-conditions as factor in the ``papss`` model. This is explained in more detail in the next section.
+Denison et al., (2020) for example reported that the former varied a lot between different subjects.
+They recommend that ``t_max`` should generally be estimated.
+
+
+``papss`` includes a cross-validation function based on the procedure recommended by
+the authors to achieve this:
 
 ```{r}
 # Method expects numeric trial variable for easy splitting.
@@ -386,23 +392,18 @@ cross_val_errs <- papss::cross_val_tmax(cand_tmax=c(1130,1030,930,830,730),
 ## Experimental designs with multiple conditions
 
 The simulation here was very limited in that it basically assumed a single condition
-and that all subjects were very similar in how they experienced demand during the
-hypothetical task performed during the condition. This is not reflective of real data.
+and that all subjects were very similar in how they experienced demand.
+This is not reflective of real data.
 
 In practice there will be data from multiple experimental conditions and subjects'
-pupil dilation time-courses will differ a lot (Denison et al., 2020). In that case it
-does not become desirable to fit a shared model for all subjects.
+pupil dilation time-courses will differ a lot (see for example Denison et al., 2020).
+In that case it does not become desirable to fit a shared model across all subjects
+because the demand solutions for different subjects will likely differ in smoothness as well.
 
-Rather, it would be more appropriate to determine for each subject the best ``t_max`` parameter. This can be done using data from all experimental conditions (see Denison et al. 2020). Then the best ``t_max`` model
-for each subject should be fitted using the data from all experimental conditions. Note, this
-does not mean that the same pupil dilation time-course will be assumed across all conditions.
-``papss`` will still estimate a different demand trajectory **per condition**. To achieve this,
-a column will have to exist in the data frame (needs to be a factor) that identifies the different factor
-levels. The name of this column needs then be passed to the ``pupil_solve()`` and ``cross_val_tmax()`` functions
-via the ``factor_id`` argument (default is "subject").
-
-From this final model, difference in demand curves can then be calculated for each subject. E.g., the
-difference between condition A and condition B as well as the difference between condition C and condition B. These can then be used as dependent variable for an additive mixed model to test whether there is a shared trend across subjects. The model should include a fixed smooth over time and factor-smooths over time for each subject (see Wood, 2017). The fixed effect will then easily reveal during which periods demand was significantly different between the experimental conditions on the population level.
+In these situations it will be better to first estimate the ``t_max`` parameter
+for each subject. This can be based on the data from all experimental conditions following
+Denison et al. (2020). Then the best ``t_max`` model for each subject should
+be fitted using the data from all experimental conditions as well!
 
 This setup is outlined in the code example below:
 
@@ -432,7 +433,6 @@ tmax_candidates <- c(1130,1030,930,830,730)
 for (si in 1:n) {
   # Get subject data
   sub_dat <- condDat[condDat$subject == si,]
-  
   
   # Perform cross-validation for this subject!
   
@@ -513,43 +513,26 @@ for (si in 1:n) {
                                                    (500/20),
                                                    factor_id = "condition")
   
-  # Calculate demand difference curve between two conditions per subject
-  demad_diff <- demand_dat_sub$demand[demand_dat_sub$factor == 1] - 
-                demand_dat_sub$demand[demand_dat_sub$factor == 2]
-  
-  demand_diff_dat_sub <- data.frame("demand_diff"=demad_diff,
-                                    "time"=unique(demand_dat_sub$time),
-                                    "subject"=si)
-  
-  demand_diff_dat <- rbind(demand_diff_dat,demand_diff_dat_sub)
-  
+  # These can then be investigated further and possibly even be aggregated
+  # to check whether there is a shared trend across subjects - but see remark
+  # below!
 }
-
-# Now analyzie via mgcv:
-demand_diff_dat$subject <- as.factor(demand_diff_dat$subject)
-
-par(mfrow=c(2,2))
-for(si in 1:n){
-  plot(demand_diff_dat$time[demand_diff_dat$subject == si],
-       demand_diff_dat$demand_diff[demand_diff_dat$subject == si],
-       type="l",
-       xlab="Time",
-       ylab="Demand difference")
-}
-
-# Everything important happens before 2000 ms
-demand_diff_dat <- demand_diff_dat[demand_diff_dat$time < 2000,]
-
-par(mfrow=c(1,1))
-m1 <- gam(demand_diff ~ s(time,k=15) + s(subject,bs="re"), data = demand_diff_dat)
-plot(m1)
-summary(m1)
-gam.check(m1)
 ```
+
+**Important**:
+
+- If there is a lot of between-subject variation in the demand trajectories, aggregating
+subjects' demand trajectories for different  will likely not reveal a meaningful shared trend.
+
+- In that case, ``pupil_slove()`` is better called on **condition averages** instead of subject averages
+(as recommended by Hoeks & Levelt, 1993). In that case, subjects' demand trajectories should still be estimated
+to get an estimate of between-subject differences.
 
 # Final remarks
 
-`papss` offers multiple model setups, not just one inspired by Wierda et al.'s setup (i.e., with extra slope terms). Dension et al. (2020) for example included intercept terms for each subject, and setting `model="DEN_SHARED"` will  similarly estimate intercept terms instead of slope terms, while setting `model=WIER_DEN_SHARED` will estimate both intercept and slope terms for each subject. See:
+`papss` offers multiple model setups, not just the one inspired by Wierda et al.'s setup (i.e., with extra slope terms). Dension et al. (2020) for example included intercept terms for each subject, and setting `model="DEN_SHARED"` will  similarly estimate intercept terms instead of slope terms.
+
+See:
 
 ```{r, eval=F, echo=T}
 help(WIER_SHARED_NNLS_model_setup)

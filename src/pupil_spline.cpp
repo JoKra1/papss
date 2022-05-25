@@ -75,7 +75,7 @@ Eigen::MatrixXd IdentityPenalty::parameterizePenalty(double l)
 // in mgcv, see link below).
 // Thus, the LambdaTerm class stores smart pointers to all the penalties
 // associated with this lambda value. It comes with a method to extract these penalties
-// (Not sure whether that is needed, just thought it might be handy..), a method to embedd these
+// (Not sure whether that is needed, just thought it might be handy..), a method to embed these
 // penalties in a zero-padded matrix (S in Wood 2017) to represent them in quadratic form cf' * S * cf
 // where cf contains a weight for each column in the model matrix (Wood, 2017 s. 4.3.1).
 // This same method can also be used to embed multiple lambda terms in the same zero-padded matrix, which is

@@ -67,10 +67,11 @@ h_basis <- function(i,expanded_time,expand_by,time,pulse_locations,n,t_max,f) {
 }
 
 #' @title
-#' Creates a single intercept term (at the population level).
+#' Intercept term creation
 #' 
 #' @description
-#' Can be manipulated via "by" argument as done in mgcv.
+#' Creates a single intercept term (at the population level).
+#' Can be manipulated via "by" argument as done in mgcv (Wood, 2017).
 #' 
 #' @param time A numeric vector containing positive time values in ms
 #' @export
@@ -80,10 +81,11 @@ create_constant_term <- function(time) {
 }
 
 #' @title
-#' Creates a single slope term (at the population level)
+#' Slope term creation
 #' 
 #' @description
-#' Can be manipulated via "by" argument as done in mgcv.
+#' Creates a single slope term (at the population level)
+#' Can be manipulated via "by" argument as done in mgcv (Wood, 2017).
 #' Note: Use of unique values that are just repeated requires all levels
 #' of the category factor (usually subjects) to have the same values on the
 #' variable time.
@@ -98,9 +100,10 @@ create_slope_term <- function(time_unq,n_cat) {
 }
 
 #' @title
-#' Create basis part of the model matrix as described by Wood (2017).
+#' Spike matrix creation
 #' 
 #' @description
+#' Create basis part of the model matrix as described by Wood (2017).
 #' Essentially, this means creating a matrix with a column for each
 #' pulse location and to assign a pupil basis (convolved with that location)
 #' to each column.
@@ -129,10 +132,11 @@ create_spike_matrix_term <- function(expanded_time,expand_by,time,pulse_location
 }
 
 #' @title
-#' Achieves "by" keyword functionality
+#' Expand term by factor
 #'
 #'@description
-#' Used in mgcv to enable by-factor smooths!
+#' Achieves "by" keyword functionality available in mgcv 
+#' to enable by-factor smooths (Wood, 2017)!
 #'
 #' @details
 #' See: Wood, S. N. (2017). Generalized Additive Models: An Introduction with R,
@@ -415,7 +419,7 @@ WIER_DEN_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,p
 #' @param convergence_tol Convergence check to terminate early
 #' @param should_collect_progress If T, then the entire coefficient update history is collected and returned. VERY COSTLY.
 #' @param start_lambda Initial lambda value. Must be > 0 if a penalty should be used! Setting this to 0 and maxiter_outer=1, leads to estimation of an un-penalized additive model, i.e., recovers the traditional NNLS estimate used by Wierda et al. (2012) and Denison et al. (2012).
-#' @param should_accum_H Whether Hessian should be approximated using BFGS rule or not. If not, then least squares Hessian matrix is used. With the BFGS rule models ended up being much smoother in our simulations. So this should be set to true if under-smoothing is observed. However, the BFGS update is much more costly and takes much more time!
+#' @param should_accum_H Whether Hessian should be approximated using BFGS rule or not (see Fletcher, R. (2000). Practical Methods of Optimization). If not, then least squares Hessian matrix is used. With the BFGS rule models ended up being much smoother in our simulations. So this should be set to true if under-smoothing is observed. However, the BFGS update is much more costly and takes much more time!
 #' @param init_cf NULL or vector with initial coefficient estimate
 #' @param expand_by Time in ms by which to expand the time-series in the past. Then pulses that happened before the recorded time-window can still be approximated! See artificial_data_analysis vignette for details.
 #' @param sample_length Duration in ms of a single sample. If pupil dilation time-course was down-sampled to 50HZ, set this to 20
@@ -536,6 +540,7 @@ pupil_solve <- function(pulse_spacing,
 #' of "An introduction to the Bootstrap" by Efron & Tribshirani. Algorithm 6.1
 #' for calculating standard error estimates based on bootstrap samples
 #' from chapter 6 is used for the actual calculations.
+#' 
 #' @param cf Coefficients recovered by papss::pupil_solve()
 #' @param pupil_var Pupil column from aggregated data frame
 #' @param setup Model setup object returned by papss::pupil_solve()
