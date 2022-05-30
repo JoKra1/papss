@@ -4,7 +4,7 @@
 \alias{h_basis}
 \title{Create "basis-functions" that make up the pupil spline.}
 \usage{
-h_basis(i, expanded_time, expand_by, time, pulse_locations, n, t_max, f)
+h_basis(i, expanded_time, expand_by, time, pulse_locations, fact, n, t_max, f)
 }
 \arguments{
 \item{i}{An integer representing index of a basis function.}
@@ -16,6 +16,8 @@ h_basis(i, expanded_time, expand_by, time, pulse_locations, n, t_max, f)
 \item{time}{A numeric vector containing positive time values in ms}
 
 \item{pulse_locations}{A numeric vector containing index values of pulse loc.}
+
+\item{fact}{The factor column from the data-frame passed to papss::pupil_solve()}
 
 \item{n}{Parameter defined by Hoeks & Levelt (number of laters)}
 

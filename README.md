@@ -27,16 +27,19 @@ install.packages("remotes")
 remotes::install_github("JoKra1/papss",build_vignettes = T)
 ```
 
-Note that building the vignette might take some time, since the solver is used on artificial data generated
-for 15 subjects. Thus, if you just want the code examples and are fine with reading the vignette in raw mark-down you might want to look at them in the /vignettes folder instead of building them when installing the package. Once the installation has been completed, you can inspect the vignette using one of the following commands:
+Once the installation has been completed, you can inspect the vignettes using one of the following commands:
 
 ```
 browseVignettes() # Search for 'papss'
-vignette("artificial_data_analysis", package="papss") # Browse vignette directly
+vignette("artificial_data_analysis", package="papss") # Browse introduction vignette directly
 ```
 
+There are two vignettes included at the moment. The *artificial_data_analysis* vignette is an introduction to how the
+package can be used in practice. The *convergence_analysis* vignette shows how reliable the algorithm recovers a given solution from
+different starting points.
+
 ## ToDo:
-- Add CV score optimization?
+- Add CV score optimization for lambda?
 - Implement difference penalty (Eilers & Marx, 1996; Wood, 2017)
 
 ## References:

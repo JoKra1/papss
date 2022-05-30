@@ -24,11 +24,12 @@
 #' @param expanded_time A numeric vector containing positive time values in ms, expanded by a certain amount of ms
 #' @param expand_by Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms
 #' @param pulse_locations A numeric vector containing index values of pulse loc.
+#' @param fact The factor column from the data-frame passed to papss::pupil_solve()
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Parameter defined by Wierda et al. (scaling factor)
 #' @export
-h_basis <- function(i,expanded_time,expand_by,time,pulse_locations,n,t_max,f) {
+h_basis <- function(i,expanded_time,expand_by,time,pulse_locations,fact,n,t_max,f) {
   
   # We need to make sure that bases towards the end do not 'contaminate'
   # the data for the next subject. Since we assume that each subject
@@ -58,11 +59,18 @@ h_basis <- function(i,expanded_time,expand_by,time,pulse_locations,n,t_max,f) {
   # within the un-expanded time window
   o_restr <- o[(expand_by + 1):length(unq_time)]
   
-  # Now repeat the basis function for each subject (i.e., until the dimension
-  # matches the dimension of time).
-  o_restr <- rep(o_restr,length.out=length(time))
+  # Now repeat the basis function for each level of the factor
+  # (i.e., until the dimension matches the dimension of time).
+  o_restr_total <- c()
+  unq_o_time <- unique(time)
   
-  return(o_restr)
+  for (level in unique(fact)){
+    level_time <- time[fact == level]
+    # Take only time-points that exist for this factor
+    o_restr_total <- c(o_restr_total,o_restr[unq_o_time %in% level_time])
+  }
+  
+  return(o_restr_total)
   
 }
 
@@ -90,13 +98,21 @@ create_constant_term <- function(time) {
 #' of the category factor (usually subjects) to have the same values on the
 #' variable time.
 #' 
-#' @param time_unq A numeric vector containing unique positive time values in ms
-#' @param n_cat Integer, number of categories for which slope should be repeated.
+#' @param time A numeric vector containing positive time values in ms
+#' @param fact The factor column from the data-frame passed to papss::pupil_solve()
 #' @export
-create_slope_term <- function(time_unq,n_cat) {
+create_slope_term <- function(time,fact) {
+  time_unq <- unique(time)
   slope <- 1:length(time_unq)
-  slope <- rep(slope,n_cat)
-  return(slope)
+  slope_total <- c()
+  
+  for (level in unique(fact)){
+    level_time <- time[fact == level]
+    # Take only time-points that exist for this factor
+    slope_total <- c(slope_total,slope[time_unq %in% level_time])
+  }
+  
+  return(slope_total)
 }
 
 #' @title
@@ -116,16 +132,17 @@ create_slope_term <- function(time_unq,n_cat) {
 #' @param expand_by Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms
 #' @param time A numeric vector containing positive time values in ms
 #' @param pulse_locations A numeric vector containing index values of pulse loc.
+#' @param fact The factor column from the data-frame passed to papss::pupil_solve()
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Parameter defined by Wierda et al. (scaling factor)
 #' @export
-create_spike_matrix_term <- function(expanded_time,expand_by,time,pulse_locations,n,t_max,f) {
+create_spike_matrix_term <- function(expanded_time,expand_by,time,pulse_locations,fact,n,t_max,f) {
   
   spike_matrix <- matrix(nrow = length(time),ncol = (length(pulse_locations)))
   
   for (i in 1:length(pulse_locations)) {
-    spike_matrix[,i] <- h_basis(i,expanded_time,expand_by,time,pulse_locations,n,t_max,f)
+    spike_matrix[,i] <- h_basis(i,expanded_time,expand_by,time,pulse_locations,fact,n,t_max,f)
   }
   
   return(spike_matrix)
@@ -150,8 +167,8 @@ create_spike_matrix_term <- function(expanded_time,expand_by,time,pulse_location
 term_by_factor <- function(term,fact) {
   
   term_by <- NULL
-  for(l in unique(fact)) {
-    term_by <- cbind(term_by, term * (fact == l))
+  for(level in unique(fact)) {
+    term_by <- cbind(term_by, term * (fact == level))
   }
   return(term_by)
 }
@@ -180,7 +197,7 @@ term_by_factor <- function(term,fact) {
 #' @param expanded_time A numeric vector containing positive time values in ms, expanded by a certain amount of ms
 #' @param expand_by Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms
 #' @param time A numeric vector containing positive time values in ms
-#' @param fact A factor vector containing factor level identifiers
+#' @param fact The factor column from the data-frame passed to papss::pupil_solve()
 #' @param pulse_locations A numeric vector containing index values of pulse loc.
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
@@ -191,8 +208,8 @@ WIER_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse
   # Extract number of factor levels
   n_fact <- length(unique(fact))
   # Setup model matrix
-  slope <- create_slope_term(unique(time),n_fact)
-  spike_matrix <- create_spike_matrix_term(expanded_time,expand_by,time,pulse_locations,n,t_max,f)
+  slope <- create_slope_term(time,fact)
+  spike_matrix <- create_spike_matrix_term(expanded_time,expand_by,time,pulse_locations,fact,n,t_max,f)
   slope_matrix <- term_by_factor(slope,fact)
   spike_matrix_by <- term_by_factor(spike_matrix,fact)
   
@@ -240,7 +257,7 @@ WIER_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse
 #' @param expanded_time A numeric vector containing positive time values in ms, expanded by a certain amount of ms
 #' @param expand_by Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms
 #' @param time A numeric vector containing positive time values in ms
-#' @param fact A factor vector containing factor level identifiers
+#' @param fact The factor column from the data-frame passed to papss::pupil_solve()
 #' @param pulse_locations A numeric vector containing index values of pulse loc.
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
@@ -251,8 +268,8 @@ WIER_IND_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse_lo
   # Extract number of factor levels
   n_fact <- length(unique(fact))
   # Setup model matrix
-  slope <- create_slope_term(unique(time),n_fact)
-  spike_matrix <- create_spike_matrix_term(expanded_time,expand_by,time,pulse_locations,n,t_max,f)
+  slope <- create_slope_term(time,fact)
+  spike_matrix <- create_spike_matrix_term(expanded_time,expand_by,time,pulse_locations,fact,n,t_max,f)
   slope_matrix <- term_by_factor(slope,fact)
   spike_matrix_by <- term_by_factor(spike_matrix,fact)
   
@@ -298,7 +315,7 @@ WIER_IND_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse_lo
 #' @param expanded_time A numeric vector containing positive time values in ms, expanded by a certain amount of ms
 #' @param expand_by Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms
 #' @param time A numeric vector containing positive time values in ms
-#' @param fact A factor vector containing factor level identifiers
+#' @param fact The factor column from the data-frame passed to papss::pupil_solve()
 #' @param pulse_locations A numeric vector containing index values of pulse loc.
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
@@ -310,7 +327,7 @@ DEN_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse_
   n_fact <- length(unique(fact))
   # Setup model matrix
   intercept <- create_constant_term(time)
-  spike_matrix <- create_spike_matrix_term(expanded_time,expand_by,time,pulse_locations,n,t_max,f)
+  spike_matrix <- create_spike_matrix_term(expanded_time,expand_by,time,pulse_locations,fact,n,t_max,f)
   intercept_matrix <- term_by_factor(intercept,fact)
   spike_matrix_by <- term_by_factor(spike_matrix,fact)
   
@@ -355,7 +372,7 @@ DEN_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse_
 #' @param expanded_time A numeric vector containing positive time values in ms, expanded by a certain amount of ms
 #' @param expand_by Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms
 #' @param time A numeric vector containing positive time values in ms
-#' @param fact A factor vector containing factor level identifiers
+#' @param fact The factor column from the data-frame passed to papss::pupil_solve()
 #' @param pulse_locations A numeric vector containing index values of pulse loc.
 #' @param n Parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Parameter defined by Hoeks & Levelt (response maximum in ms)
@@ -368,8 +385,8 @@ WIER_DEN_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,p
   
   # Setup model matrix
   intercept <- create_constant_term(time)
-  slope <- create_slope_term(unique(time),n_fact)
-  spike_matrix <- create_spike_matrix_term(expanded_time,expand_by,time,pulse_locations,n,t_max,f)
+  slope <- create_slope_term(time,fact)
+  spike_matrix <- create_spike_matrix_term(expanded_time,expand_by,time,pulse_locations,fact,n,t_max,f)
   intercept_matrix <- term_by_factor(intercept,fact)
   slope_matrix <- term_by_factor(slope,fact)
   spike_matrix_by <- term_by_factor(spike_matrix,fact)
@@ -413,7 +430,7 @@ WIER_DEN_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,p
 #' @param n Choice for parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Choice for parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Choice for parameter defined by Wierda et al. (scaling factor)
-#' @param pulse_dropping_factor Last pulse is modelled at index corresponding to: length(unique(data$time)) - (pulse_dropping_factor * round(t_max/100)) - 1
+#' @param drop_last Drop pulses that would happen in the last drop_last ms
 #' @param maxiter_inner Maximum steps taken by inner optimizer
 #' @param maxiter_outer Maximum steps taken by outer optimizer
 #' @param convergence_tol Convergence check to terminate early
@@ -423,6 +440,8 @@ WIER_DEN_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,p
 #' @param init_cf NULL or vector with initial coefficient estimate
 #' @param expand_by Time in ms by which to expand the time-series in the past. Then pulses that happened before the recorded time-window can still be approximated! See artificial_data_analysis vignette for details.
 #' @param sample_length Duration in ms of a single sample. If pupil dilation time-course was down-sampled to 50HZ, set this to 20
+#' @param time_id Name of time column in data
+#' @param pupil_id Name of pupil column in data
 #' @export
 pupil_solve <- function(pulse_spacing,
                         data,
@@ -430,7 +449,7 @@ pupil_solve <- function(pulse_spacing,
                         model="WIER_SHARED",
                         n=10.1,
                         t_max=930,f=1/(10^24),
-                        pulse_dropping_factor=5,
+                        drop_last=500,
                         maxiter_inner=10000,
                         maxiter_outer=25,
                         convergence_tol=1e-08,
@@ -439,29 +458,55 @@ pupil_solve <- function(pulse_spacing,
                         should_accum_H=F,
                         init_cf = NULL,
                         expand_by = 800,
-                        sample_length = 20) {
+                        sample_length = 20,
+                        time_id="time",
+                        pupil_id="pupil") {
   
+  # Checks on data layout
+  if(!(pupil_id) %in% colnames(data)){
+    stop(paste0("The column ",pupil_id, "that should contain the pupil data does not exist."))
+  }
   
-  # Create y vector
-  y <- matrix(nrow = length(data$pupil),ncol=1)
-  y[,1] <- data$pupil
+  if(!(time_id) %in% colnames(data)){
+    stop(paste0("The column ",time_id, "that should contain the time data does not exist."))
+  }
+  
+  if(!(factor_id) %in% colnames(data)){
+    stop(paste0("The column ",factor_id, "that should contain the condition levels does not exist."))
+  }
   
   # Extract factor variable
   fact <- data[,colnames(data) == factor_id]
   
+  # Extract time variable
+  time <- data[,colnames(data) == time_id]
+  
+  # Extract pupil variable
+  pupil <- data[,colnames(data) == pupil_id]
+  
+  # Check that time is positive
+  if(min(time) < 0){
+    stop("The time variable must contain only values >= 0.")
+  }
+  
+  # Create y vector
+  y <- matrix(nrow = length(pupil),ncol=1)
+  y[,1] <- pupil
+  
+  
   # Expand time for pulses that happened before the the time-window
   # that is considered.
-  expanded_time <- data$time
+  expanded_time <- time
   
   if(expand_by > 0){
     time_expansion <- seq(0,(expand_by - sample_length), by = sample_length)
     expanded_time <- rep(c(time_expansion,
-                           (unique(data$time) + expand_by)),
+                           (unique(time) + expand_by)),
                          times=length(unique(fact)))
   }
   
   # Create pulse location vector
-  last_pulse <- length(unique(expanded_time)) - (pulse_dropping_factor * round(t_max/100)) - 1
+  last_pulse <- length(unique(expanded_time)) - round(drop_last/sample_length)
   pulse_locations <- seq(1,last_pulse,by=pulse_spacing)
   real_locations <- unique(expanded_time)[pulse_locations] - expand_by
   
@@ -470,28 +515,28 @@ pupil_solve <- function(pulse_spacing,
     # Wierda et al. (2012) model, but with shared penalty!
     setup <- WIER_SHARED_NNLS_model_setup(expanded_time,
                                           (expand_by/sample_length),
-                                          data$time,fact,
+                                          time,fact,
                                           pulse_locations,
                                           n,t_max,f)
   } else if (model == "WIER_IND") {
     # Wierda et al. (2012) model, but with individual penalties!
     setup <- WIER_IND_NNLS_model_setup(expanded_time,
                                       (expand_by/sample_length),
-                                      data$time,fact,
+                                      time,fact,
                                       pulse_locations,
                                       n,t_max,f)
   } else if (model == "DEN_SHARED") {
     # Denison et al. (2012) model, but with shared penalty!
     setup <- DEN_SHARED_NNLS_model_setup(expanded_time,
                                          (expand_by/sample_length),
-                                         data$time,fact,
+                                         time,fact,
                                          pulse_locations,
                                          n,t_max,f)
   } else if (model == "WIER_DEN_SHARED") {
     # Combined model with shared penalty!
     setup <- WIER_DEN_SHARED_NNLS_model_setup(expanded_time,
                                               (expand_by/sample_length),
-                                              data$time,fact,
+                                              time,fact,
                                               pulse_locations,
                                               n,t_max,f)
   } else {
@@ -665,7 +710,7 @@ bootstrap_papss_standard_error <- function(cf,
 #' @param n Choice for parameter defined by Hoeks & Levelt (number of laters)
 #' @param t_max Choice for parameter defined by Hoeks & Levelt (response maximum in ms)
 #' @param f Choice for parameter defined by Wierda et al. (scaling factor), can also be a vector with values for each t_max candidate
-#' @param pulse_dropping_factor Last pulse is modelled at index corresponding to: length(unique(data$time)) - (pulse_dropping_factor * round(t_max/100)) - 1
+#' @param drop_last Drop pulses that would happen in the last drop_last ms
 #' @param maxiter_inner Maximum steps taken by inner optimizer
 #' @param maxiter_outer Maximum steps taken by outer optimizer
 #' @param convergence_tol Convergence check to terminate early
@@ -674,6 +719,8 @@ bootstrap_papss_standard_error <- function(cf,
 #' @param init_cf NULL or vector with initial coefficient estimate
 #' @param expand_by Time in ms by which to expand the time-series in the past. Then pulses that happened before the recorded time-window can still be approximated! See artificial_data_analysis vignette for details.
 #' @param sample_length Duration in ms of a single sample. If pupil dilation time-course was down-sampled to 50HZ, set this to 20
+#' @param time_id Name of time column in trial_data
+#' @param pupil_id Name of pupil column in trial_data
 #' @param should_plot Whether or not fit plots should be generated as well.
 #' @export
 cross_val_tmax <- function(cand_tmax,
@@ -684,7 +731,7 @@ cross_val_tmax <- function(cand_tmax,
                         model="WIER_SHARED",
                         n=10.1,
                         f=1/(10^24),
-                        pulse_dropping_factor=5,
+                        drop_last=500,
                         maxiter_inner=10000,
                         maxiter_outer=25,
                         convergence_tol=1e-08,
@@ -693,7 +740,26 @@ cross_val_tmax <- function(cand_tmax,
                         init_cf = NULL,
                         expand_by = 800,
                         sample_length = 20,
+                        time_id="time",
+                        pupil_id="pupil",
                         should_plot=T){
+  
+  # Checks on data layout
+  if(!(pupil_id) %in% colnames(trial_data)){
+    stop(paste0("The column ",pupil_id, "that should contain the pupil data does not exist."))
+  }
+  
+  if(!(time_id) %in% colnames(trial_data)){
+    stop(paste0("The column ",time_id, "that should contain the time data does not exist."))
+  }
+  
+  if(!(factor_id) %in% colnames(trial_data)){
+    stop(paste0("The column ",factor_id, "that should contain the condition levels does not exist."))
+  }
+  
+  if(!("num_trial" %in% colnames(trial_data))){
+    stop("There must be a 'num_trial' column in the trial level data passed to this function.")
+  }
   
   # Collect cross-validation errors
   errs <- c()
@@ -717,29 +783,24 @@ cross_val_tmax <- function(cand_tmax,
       held_out_dat <- trial_data[trial_data$num_trial %in% fold,]
       
       # Calculate average for held-out set.
-      aggr_held_out <- aggregate(list("pupil"=held_out_dat$pupil),
+      aggr_held_out <- aggregate(list("pupil"=held_out_dat[,colnames(held_out_dat) == pupil_id]),
                                  by=list("factor"=held_out_dat[,colnames(held_out_dat) == factor_id],
-                                         "time"=held_out_dat$time),FUN=mean)
+                                         "time"=held_out_dat[,colnames(held_out_dat) == time_id]),FUN=mean)
       
       # This is the remaining data on which the model is fitted.
       remaining_dat <- trial_data[!(trial_data$num_trial %in% fold),]
       
       # This are the actual averages passed to the model
-      aggr_remaining <- aggregate(list("pupil"=remaining_dat$pupil),
+      aggr_remaining <- aggregate(list("pupil"=remaining_dat[,colnames(remaining_dat) == pupil_id]),
                                   by=list("factor"=remaining_dat[,colnames(remaining_dat) == factor_id],
-                                          "time"=remaining_dat$time),FUN=mean)
+                                          "time"=remaining_dat[,colnames(remaining_dat) == time_id]),FUN=mean)
       
-      # Check that all data-points exist in both sets.
+      # Check that all for each condition all time-points in held-out set exist at least once in
+      # remaining set (otherwise residual calculation will not work)
       aggr_held_out$timeCond <- interaction(aggr_held_out$time,aggr_held_out$factor)
       aggr_remaining$timeCond <- interaction(aggr_remaining$time,aggr_remaining$factor)
       
-      # If one is missing completely in held-out set, just set that one to the 
-      # from remaining set.
-      if(nrow(aggr_held_out) < nrow(aggr_remaining)){
-        cat("Warning: held-out set has ", nrow(aggr_remaining)- nrow(aggr_held_out), "time-points less. Assigning missing ones from remaining set.\n")
-        aggr_held_out <- rbind(aggr_held_out,aggr_remaining[!(aggr_remaining$timeCond %in% aggr_held_out$timeCond),])
-        cat("Now, nrow(held-out) == ", nrow(aggr_held_out), " nrow(remaining) == ", nrow(aggr_remaining), ".\n")
-      }
+      aggr_held_out <- droplevels(aggr_held_out[aggr_held_out$timeCond %in% aggr_remaining$timeCond,])
       
       # Sort data correctly
       aggr_held_out <- aggr_held_out[order(aggr_held_out$factor),]
@@ -753,7 +814,7 @@ cross_val_tmax <- function(cand_tmax,
                                  n,
                                  t_max=tmc,
                                  fc,
-                                 pulse_dropping_factor,
+                                 drop_last,
                                  maxiter_inner,
                                  maxiter_outer,
                                  convergence_tol,
@@ -762,42 +823,45 @@ cross_val_tmax <- function(cand_tmax,
                                  should_accum_H,
                                  init_cf,
                                  expand_by,
-                                 sample_length)
+                                 sample_length,
+                                 "time",
+                                 "pupil")
       
       recovered_coef <- solvedPupil$coef
       model_mat <- solvedPupil$modelmat
       
-      # Calculate held-out residuals
+      # Calculate predictions based on remaining data set
       pred <- model_mat %*% recovered_coef
-      res <- aggr_held_out$pupil - pred
       
-      # And squared error
+      # Make sure to only take model prediction for time-points that are also
+      # in held-out set when calculating held-out residuals.
+      res <- aggr_held_out$pupil - pred[aggr_remaining$timeCond %in% aggr_held_out$timeCond]
+      
+      # Now calculate squared CV error
       sum_sqrt_res <- sum(res**2)
       
-      # Update average error
+      # Update average CV error
       sqrt_err <- sqrt_err + ((nrow(held_out_dat)/nrow(trial_data)) * sum_sqrt_res)
       
       if(should_plot){
-        plot(1:nrow(model_mat),
-             aggr_remaining$pupil,
+        plot(1:nrow(aggr_held_out),
+             aggr_remaining$pupil[aggr_remaining$timeCond %in% aggr_held_out$timeCond],
              type="l",lwd=3,
              xlab="Index",
              ylab="Pupil dilation",
              main=paste0("t_max: ", tmc))
-        lines(1:nrow(model_mat),
-              model_mat %*% recovered_coef,
+        lines(1:nrow(aggr_held_out),
+              pred[aggr_remaining$timeCond %in% aggr_held_out$timeCond],
               lwd=3,
               col= "red",
               lty=2)
-        lines(1:nrow(model_mat),
+        lines(1:nrow(aggr_held_out),
               aggr_held_out$pupil,
               lty=3,
               col="blue")
         legend("topleft",c("Remaining pupil","Predicted pupil","Held-out pupil"),
                lty = c(1,2,3),col=c("black","red","blue"),lwd = 3)
       }
-      
-
     }
     
     # Collect error for this particular t_max
@@ -832,6 +896,7 @@ cross_val_tmax <- function(cand_tmax,
 #' @param n Choice for n parameter
 #' @param t Choice for t_max parameter
 #' @param f Choice for f parameter
+#' @param time_id Name of time column in aggr_dat
 #' @export
 extract_demand_for_fact <- function(aggr_dat,
                                     recovered_coef,
@@ -844,20 +909,27 @@ extract_demand_for_fact <- function(aggr_dat,
                                     model="WIER_SHARED",
                                     n = 10.1,
                                     t = 930,
-                                    f = 1/(10^24)){
+                                    f = 1/(10^24),
+                                    time_id="time"){
   
+  # Checks on data layout
+  
+  if(!(time_id) %in% colnames(aggr_dat)){
+    stop(paste0("The column ",time_id, "that should contain the time data does not exist."))
+  }
+  
+  if(!(factor_id) %in% colnames(aggr_dat)){
+    stop(paste0("The column ",factor_id, "that should contain the condition levels does not exist."))
+  }
+  
+  # Extract factor variable
   factor <- aggr_dat[,colnames(aggr_dat) == factor_id]
+  
+  # Extract time variable
+  time <- aggr_dat[,colnames(aggr_dat) == time_id]
+  
   unq_factor <- unique(factor)
   n_fact <- length(unq_factor)
-  
-  # First re-create demand-related parts of model matrix.
-  semiPredX <- papss::create_spike_matrix_term(unique(expanded_time),
-                                               expanded_by,
-                                               unique(aggr_dat$time),
-                                               pulse_locations,
-                                               n,
-                                               t,
-                                               f)
   
   demand_dat <- NULL
   
@@ -873,16 +945,16 @@ extract_demand_for_fact <- function(aggr_dat,
   for(fi in 1:n_fact){
     
     # Get corresponding spline spike weights
-    splineCoef <- recovered_coef[((n_param_coef + 1) + ((fi - 1) * ncol(semiPredX))):(n_param_coef+(fi * ncol(semiPredX)))]
+    splineCoef <- recovered_coef[((n_param_coef + 1) + ((fi - 1) * length(pulse_locations))):(n_param_coef+(fi * length(pulse_locations)))]
     
     # Align with original time variable
-    demand_trajectory <- rep(0,length.out = length(unique(aggr_dat$time)))
-    demand_trajectory[unique(aggr_dat$time) %in%
+    demand_trajectory <- rep(0,length.out = length(unique(time)))
+    demand_trajectory[unique(time) %in%
                         real_locations[pulses_in_time]] <- splineCoef[pulses_in_time]
     
     # Collect demand data
     demand_fact_dat <- data.frame("demand"=demand_trajectory,
-                                  "time"=unique(aggr_dat$time),
+                                  "time"=unique(time),
                                   "factor"=rep(unq_factor[fi],
                                                length.out=length(demand_trajectory)))
     

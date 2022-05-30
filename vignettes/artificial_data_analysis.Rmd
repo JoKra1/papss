@@ -51,8 +51,10 @@ pulse_locations <- seq(1,length(time),by=1)
 # that happened during the 5th. sample using the default parameters
 # estimated by Hoeks & Levelt.
 # Note that the 'f' parameter was added later by Wierda et al. (2012) to
-# scale the response of the pupil to a spike of fixed strength.
-pupil_dilation <- h_basis(5,time,0,time,pulse_locations,n=10.1,t_max=930,f=1/(10^24))
+# scale the response of the pupil.
+pupil_dilation <- h_basis(5,time,0,time,pulse_locations,
+                          rep(1,length.out=length(time)),
+                          n=10.1,t_max=930,f=1/(10^24))
 
 # Which we can now visualize...
 plot(time,pupil_dilation,typ="l",lwd=3,xlab="time",ylab="Pupil dilation")
@@ -81,7 +83,9 @@ pupil <- rep(0,length.out=length(time))
 
 # We now refer to the resulting variables as h_{i}
 H <- matrix(nrow=length(time),ncol = 4)
-h1 <- h_basis(5,time,0,time,pulse_locations,n=10.1,t_max=930,f=1/(10^24))
+h1 <- h_basis(5,time,0,time,pulse_locations,
+              rep(1,length.out=length(time)),
+              n=10.1,t_max=930,f=1/(10^24))
 H[,1] <- h1
 # Don't forget to add the weighted contribution of this spike to the overall time-course
 pupil <- pupil + 0.3 * h1
@@ -101,7 +105,9 @@ betas <- runif(3)
 # Now add more spikes!
 iw <- 1
 for (si in c(10,15,20)) {
-  hi <- h_basis((si*3),time,0,time,pulse_locations,n=10.1,t_max=930,f=1/(10^24))
+  hi <- h_basis((si*3),time,0,time,pulse_locations,
+                rep(1,length.out=length(time)),
+                n=10.1,t_max=930,f=1/(10^24))
   pupil <- pupil + betas[iw] * hi
   H[,(iw+1)] <- hi
   
@@ -125,8 +131,12 @@ However, ``papss`` is not limited to the assumption made by Hoeks & Levelt that 
 
 Of course we first need data. ``papss`` imposes some requirements on the layout:
 
-- ``papss`` expects pupil dilation data in a *pupil* column. 
-- ``papss`` expects the time variable in a *time* column.
+- ``papss`` expects pupil dilation data in a *pupil* column. If your column has a different name
+pass it to the ``pupil_id`` argument when calling ``papss::pupil_solve()``.
+
+- ``papss`` expects the time variable in a *time* column. If your column has a different name
+pass it to the ``time_id`` argument when calling ``papss::pupil_solve()``.
+
 - ``papss`` by default expects a *subject* factor, but it is also possible
 to calculate demand trajectories for each level of any other categorical predictor
 (e.g., conditions in an experiment). In that case the name of the factor column needs to
@@ -145,9 +155,11 @@ The code below forms simple averages over time and subject, because the method b
 **Important**:
 
 - The aggregated data must be **sorted** according to the level of the factor passed to ``factor_id``
-- The aggregates should not contain NA values
-- The time variable should contain the same values for each factor level! I.e., the same time-series
-should be available for each condition.
+- The aggregates should not contain **NA** values
+- The time variable can contain **different values per condition**. However, this only means that it is possible
+that individual values can be missing in one or more condition. It should still be the case that the same time-range
+generally applies to all conditions.
+- All time values need to $>= 0$. The easiest way to achieve this, is to shift the data time-column by its minimum.
 
 In some experimental setups, aggregation of the data is not desirable. For example, with manipulations of a continuous predictor variable, or between-participant differences in the experimental stimuli that were presented. In these case, model-based aggregates may be a better solution, which estimate an additive model of the pupil (for example using 'mgcv', see Wood (2017)) that takes into account the effects of these predictors on the size of the pupil.
 
@@ -191,13 +203,13 @@ Below we summarize the most important function arguments that usually need to be
 
 - *sample_length*: The duration of a single sample (in ms). I.e., if the pupil-dilation time-course is down-sampled to 50 HZ, this argument needs to be set to 20 (the default).
 
-- *pulse_dropping_factor* : Controls the possibility to drop pulses far towards the end of the time-window, as these are often  over-estimated (as discussed in Wierda et al, 2012). Increasing the amount of dropped pulses, obviously frees more basis functions that can be dedicated to account for baseline fluctuations, so in practice researchers will usually have to find a good balancing act between this argument and the ``expand_by`` one. ``papss`` will prompt a warning and cancel estimation, in case the problem becomes unidentifiable!
+- *drop_last* : Controls the possibility to drop pulses far towards the end of the time-window, as these are often  over-estimated (as discussed in Wierda et al, 2012). Increasing the amount of dropped pulses, obviously frees more basis functions that can be dedicated to account for baseline fluctuations, so in practice researchers will usually have to find a good balancing act between this argument and the ``expand_by`` one. ``papss`` will prompt a warning and cancel estimation, in case the problem becomes unidentifiable!
 
-- *f* : Scaling parameter of the pupil response function, introduced by Wierda et al. This value is generally not known. The choice for this parameter depends largely on the selected pre-processing pipeline and the eye-tracker used for recording. For example, Wierda et al. (2012) used normalized pupil dilation time-courses. In that case a value of (1/(10^(27))) worked quite well. The simulation here generates data that is more in line with data that was base-lined by means of subtraction. We achieved good results with a value of (1/(10^(24))) in that case. This also depends on the value selected for ``t_max``! With lower values for ``t_max`` the exponent (24) should also be lowered! ``papss`` might otherwise show convergence issues (this can be tested by checking the ``convergence`` attribute returned by ``papss::pupil_solve()``: a negative number means trouble!). Recovering the precise value is however not crucial from a theoretical perspective, since the shape of the pattern will still be recovered, up to a difference in a scaling factor!
+- *f* : Scaling parameter of the pupil response function, introduced by Wierda et al. This value is generally not known. The choice for this parameter depends largely on the selected pre-processing pipeline and the eye-tracker used for recording. For example, Wierda et al. (2012) used normalized pupil dilation time-courses. In that case a value of (1/(10^(27))) worked quite well. The simulation here generates data that is more in line with data that was base-lined by means of subtraction. We achieved good results with a value of (1/(10^(24))) in that case. Note, this also depends on the value selected for ``t_max``!
 
 - *t_max*: Choice the peak delay parameter of the pupil response function (Hoeks & Levelt, 1993). Denison et al. (2020) showed that the default value of 930 ms is not always a good choice! (see **Advanced topics** at the end of this document)
 
-- *maxiter_outer*: Maximum number of iterations for outer estimator (spike penalization). Should be increased if ``papss`` does not converge (and these issues do not depend on ``t_max``).
+- *maxiter_outer*: Maximum number of iterations for outer estimator (spike penalization). Should be increased if ``papss`` does not converge (and these issues do not depend on ``t_max``). To check convergence inspect the ``convergence`` attribute returned by ``papss::pupil_solve()`` a negative number means the algorithm did not converge.
 
 There are more arguments that alter how ``papss`` attempts to recover demand trajectories, but these are the most important ones! The help function for ``papss::pupil_solve()`` provides more information on the remaining arguments.
 
@@ -207,19 +219,24 @@ help(pupil_solve)
 
 With choices made for all those parameters we can now attempt to recover the subjects' demand trajectories! We set the `maxiter_outer` argument to 10 to speed up estimation for this example. In practice, good convergence requires between 15-30 iterations of the outer optimizer.
 
-```{r}
+```{r,include=FALSE}
+solvedPupil <- readRDS("../data/solvedPupil.rds")
+```
+
+```{r, eval=FALSE}
 # Solve pupil spline
 solvedPupil <- papss::pupil_solve(pulse_spacing = 1,
                            data = aggr_dat,
-                           maxiter_inner = 10,
+                           maxiter_inner = 10000,
                            maxiter_outer = 10,
-                           expand_by = 500,
-                           pulse_dropping_factor = 3,
+                           expand_by = 0,
+                           drop_last = 300, # Drop pulses from last 300 ms
                            f=(1/(10^(24))))
 
 recovered_coef <- solvedPupil$coef
 model_mat <- solvedPupil$modelmat
 ```
+
 
 ## Visualize estimates
 
@@ -240,7 +257,7 @@ The most important arguments for the function are:
 
 - *expanded_time*: The expanded time series returned by papss::pupil_solve()
 
-- *expanded_by*: Expansion time in ms divided by sample length in ms (i.e., 500/20 for ``pupil_solve(expand_by=500, sample_length=20))
+- *expanded_by*: Expansion time in ms divided by sample length in ms (i.e., 500/20 for ``pupil_solve(expand_by=500, sample_length=20)``)
 
 - *factor_id*: Name of factor column in aggr_dat
 
@@ -250,6 +267,11 @@ The most important arguments for the function are:
 
 You can again check ``help(extract_demand_for_fact)`` to learn more about the remaining arguments as well as default values.
 
+```{r, include=FALSE}
+# We are in the fortunate situation that we have the true demand
+add_sim <- readRDS("../data/sim_dat_gen_model.rds")
+```
+
 ```{r}
 # Returns data-frame with demand over time per subject
 demand_extract <- extract_demand_for_fact(aggr_dat,
@@ -258,20 +280,28 @@ demand_extract <- extract_demand_for_fact(aggr_dat,
                                           solvedPupil$realLocations,
                                           solvedPupil$pulsesInTime,
                                           solvedPupil$expandedTime,
-                                          500/20, # expand_by/sample_length arguments for pupil_solve()
+                                          0/20, # expand_by/sample_length arguments for pupil_solve()
                                           factor_id = "subject") 
   
 # Get demand dat for each subject and plot
 for (sub in unique(aggr_dat$subject)) {
   sub_dat <- demand_extract[demand_extract$factor == sub,]
+  # Since this is simulated data we can compare the solutions to the simulated truth
   plot(sub_dat$time,
-       sub_dat$demand,
+       add_sim$sub_demand[,as.numeric(sub)],
        type="l",
        xlab="Time",
        ylab="Demand",
        main=sub,
-       ylim = c(0,max(demand_extract$demand)))
+       ylim = c(0,1.0),
+       lwd=3)
+  # Now plot recovered estimate
+  lines(sub_dat$time,sub_dat$demand,lty=2,col="red",lwd=3)
 }
+legend("topleft",c("True Demand",
+                   "Estimated Demand"),
+       lty=c(1,2),
+       col=c("black","red"))
 ```
 
 # Advaced topics
@@ -291,7 +321,7 @@ This becomes important when we want to get an estimate of
 parameter confidence using bootstrapping (Efron & Tibshirani, 1993).
 ``papss`` supports residual replacing only and as discussed by
 Efron & Tibshirani, this requires evaluating the residuals carefully to ensure
-that they match the model that we would expect:
+that they match what we would expect according to the model:
 
 ```{r}
 plot(solvedPupil$fitted,
@@ -308,12 +338,16 @@ The residuals should show approximately constant variance and low correlation
 across different lags (Efron & Tibshirani, 1993). Only then are the confidence
 estimates, recovered below, to be trusted.
 
-```{r}
+```{r,include=FALSE}
+bootstrap <- readRDS("../data/bootstrap.rds")
+```
+
+```{r,eval=FALSE}
 # Perform bootstrap estimation.
 bootstrap <- papss::bootstrap_papss_standard_error(solvedPupil$coef,
                                                    aggr_dat$pupil,
                                                    solvedPupil$setup,
-                                                   N=10, # This should be higher in practice!
+                                                   N=15, # This should be higher in practice!
                                                    maxiter_inner = 100000,
                                                    maxiter_outer = 10,
                                                    f=(1/(10^(24))))
@@ -326,21 +360,36 @@ uncertainty surrounding them.
 se <- bootstrap$standardError
   
 # Add se plot to demand dat extracted earlier
+si <- 1
 for (sub in unique(aggr_dat$subject)) {
   sub_dat <- demand_extract[demand_extract$factor == sub,]
+  
+  # Get standard error for ALL coef for this subject
+  sub_se <- se[((si - 1) * length(solvedPupil$pulseLocations) + 1):(si * length(solvedPupil$pulseLocations))]
+  
+  # Only consider those in the time-window of interest, so drop those added
+  # because of expand_by!
+  sub_se <- sub_se[solvedPupil$pulsesInTime]
+  
+  # Embed those in the time-variable for the plot
+  sub_se_e <- rep(0,times=length(sub_dat$time))
+  sub_se_e[sub_dat$time %in% solvedPupil$realLocations[solvedPupil$pulsesInTime]] <- sub_se
+  
   plot(sub_dat$time,
        sub_dat$demand,
        type="l",
        xlab="Time",
        ylab="Demand",
        main=sub,
-       ylim = c(0,max(demand_extract$demand)))
+       ylim = c(0,max(demand_extract$demand)),
+       lwd=3)
   
   lines(sub_dat$time,
-        sub_dat$demand + se,lty=2)
+        sub_dat$demand + sub_se_e,lty=2)
   
   lines(sub_dat$time,
-        sub_dat$demand - se,lty=2)
+        sub_dat$demand - sub_se_e,lty=2)
+  si <- si + 1
 }
 ```
 
@@ -353,9 +402,12 @@ good starting points but they are unlikely to be perfect!
 Denison et al., (2020) for example reported that the former varied a lot between different subjects.
 They recommend that ``t_max`` should generally be estimated.
 
-
 ``papss`` includes a cross-validation function based on the procedure recommended by
 the authors to achieve this:
+
+```{r, include=FALSE}
+cross_val_errs <- readRDS("../data/cross_val_errs.rds")
+```
 
 ```{r}
 # Method expects numeric trial variable for easy splitting.
@@ -372,33 +424,42 @@ folds <- list()
 for(f in fold_order){
   folds[[f]] <- unq_trials[fold_order == f]
 }
+```
 
+```{r, eval=FALSE}
 # Perform cross-validation to find tmax!
-cross_val_errs <- papss::cross_val_tmax(cand_tmax=c(1130,1030,930,830,730),
+cross_val_errs <- papss::cross_val_tmax(cand_tmax=c(1130,1030,930,830,730), # Candidate t_max values to be checked
                                         folds=folds,
                                         pulse_spacing = 1,
                                         trial_data = dat,
-                                        maxiter_inner = 100000,
+                                        maxiter_inner = 10000,
                                         maxiter_outer = 10,
                                         model="WIER_SHARED",
-                                        start_lambda = 0.1,
+                                        start_lambda = 1.0,
                                         expand_by = 0,
-                                        pulse_dropping_factor = 4,
-                                        f=(1/(10^(24))))
+                                        drop_last = 300,
+                                        f=(1/(10^(24))),
+                                        should_plot = F)
+```
 
-
+```{r}
+plot(c(1130,1030,930,830,730),cross_val_errs,ylim=c(min(cross_val_errs) - 0.01*min(cross_val_errs),
+                             max(cross_val_errs) + 0.01*max(cross_val_errs)),
+       ylab="Cross-validation error",
+       xlab="t_max candidates")
+lines(c(1130,1030,930,830,730),cross_val_errs)
 ```
 
 ## Experimental designs with multiple conditions
 
-The simulation here was very limited in that it basically assumed a single condition
-and that all subjects were very similar in how they experienced demand.
+In this simulation all subjects were very similar in how they experienced demand.
 This is not reflective of real data.
 
-In practice there will be data from multiple experimental conditions and subjects'
+Usually there is data from multiple experimental conditions and subjects'
 pupil dilation time-courses will differ a lot (see for example Denison et al., 2020).
-In that case it does not become desirable to fit a shared model across all subjects
-because the demand solutions for different subjects will likely differ in smoothness as well.
+In that case fitting a shared model across subjects is often not appropriate
+because the demand solutions for different subjects will likely
+differ in smoothness as well.
 
 In these situations it will be better to first estimate the ``t_max`` parameter
 for each subject. This can be based on the data from all experimental conditions following
@@ -407,10 +468,10 @@ be fitted using the data from all experimental conditions as well!
 
 This setup is outlined in the code example below:
 
-```{r, eval=F, echo=T}
+```{r, eval=FALSE}
 # First build condition dat
 condDat <- NULL
-n <- 15
+n <- 2
 for (ci in 1:2) {
   cDat <- additive_pupil_sim(n_sub = n,
                               slope_dev = 1.5,
@@ -463,7 +524,7 @@ for (si in 1:n) {
                                           model="WIER_SHARED",
                                           start_lambda = 0.1,
                                           expand_by = 0,
-                                          pulse_dropping_factor = 4,
+                                          drop_last = 300,
                                           f=(1/(10^(24))))
   
   # Get best t_max for this subject!
@@ -474,8 +535,6 @@ for (si in 1:n) {
 }
 
 # Now fit the best model for each subject
-
-# Store the difference curves for analysis with mgcv
 demand_diff_dat <- NULL
 for (si in 1:n) {
   # Get subject data again
@@ -498,8 +557,8 @@ for (si in 1:n) {
                            maxiter_outer = 10,
                            model="WIER_SHARED",
                            start_lambda = 0.1,
-                           expand_by = 500,
-                           pulse_dropping_factor = 4,
+                           expand_by = 0,
+                           drop_last = 300,
                            f=(1/(10^(24))),
                            t_max = subj_t_max)
   
@@ -510,7 +569,7 @@ for (si in 1:n) {
                                                    solvedPupil$realLocations,
                                                    solvedPupil$pulsesInTime,
                                                    solvedPupil$expandedTime,
-                                                   (500/20),
+                                                   (0/20),
                                                    factor_id = "condition")
   
   # These can then be investigated further and possibly even be aggregated
@@ -522,10 +581,10 @@ for (si in 1:n) {
 **Important**:
 
 - If there is a lot of between-subject variation in the demand trajectories, aggregating
-subjects' demand trajectories for different  will likely not reveal a meaningful shared trend.
+subjects' demand trajectories will likely not reveal a meaningful shared trend.
 
 - In that case, ``pupil_slove()`` is better called on **condition averages** instead of subject averages
-(as recommended by Hoeks & Levelt, 1993). In that case, subjects' demand trajectories should still be estimated
+(as recommended by Hoeks & Levelt, 1993). Subjects' demand trajectories should still be estimated
 to get an estimate of between-subject differences.
 
 # Final remarks
@@ -534,7 +593,7 @@ to get an estimate of between-subject differences.
 
 See:
 
-```{r, eval=F, echo=T}
+```{r, eval=FALSE}
 help(WIER_SHARED_NNLS_model_setup)
 help(WIER_IND_NNLS_model_setup)
 help(DEN_SHARED_NNLS_model_setup)
@@ -557,11 +616,15 @@ sim_obj <- additive_pupil_sim(n_sub = n,
 ```
 
 
-# References
+# References & further reading
+
+**NNLS optimizer used here**:
 
 Ang, A. (2020a). Accelerated gradient descent for large-scale optimization: On Gradient descent solving Quadratic problems—Guest lecture of MARO 201—Advanced Optimization. https://angms.science/doc/teaching/GDLS.pdf
 
 Ang, A. (2020b). Nonnegative Least Squares—PGD, accelerated PGD and with restarts. https://angms.science/doc/NMF/nnls_pgd.pdf
+
+**Pupil dilation modelling**:
 
 Denison, R. N., Parker, J. A., & Carrasco, M. (2020). Modeling pupil responses to rapid sequential events. Behavior Research Methods, 52(5), 1991–2007. https://doi.org/10.3758/s13428-020-01368-6
 
@@ -569,11 +632,15 @@ Fink, L., Simola, J., Tavano, A., Lange, E. B., Wallot, S., & Laeng, B. (2021). 
 
 Hoeks, B., & Levelt, W. (1993). Pupillary dilation as a measure of attention: A quantitative system analysis. Behav. Res. Meth. Ins. C., 25, 16–26.
 
+Wierda, S. M., van Rijn, H., Taatgen, N. A., & Martens, S. (2012). Pupil dilation deconvolution reveals the dynamics of attention at high temporal resolution. Proceedings of the National Academy of Sciences of the United States of America, 109(22), 8456–8460. https://doi.org/10.1073/pnas.1201858109
+
+**NNLS and acceleration in general**:
+
 Slawski, M., & Hein, M. (2014). Non-negative least squares for high-dimensional linear models: Consistency and sparse recovery without regularization. ArXiv:1205.0953 [Math, Stat]. http://arxiv.org/abs/1205.0953
 
 Sutskever, I., Martens, J., Dahl, G., & Hinton, G. (2013). On the importance of initialization and momentum in deep learning. Proceedings of the 30th International Conference on Machine Learning, 1139–1147. https://proceedings.mlr.press/v28/sutskever13.html
 
-Wierda, S. M., van Rijn, H., Taatgen, N. A., & Martens, S. (2012). Pupil dilation deconvolution reveals the dynamics of attention at high temporal resolution. Proceedings of the National Academy of Sciences of the United States of America, 109(22), 8456–8460. https://doi.org/10.1073/pnas.1201858109
+**GAMMs in general and the specific spike penalization method used here**:
 
 Wood, S. N., & Fasiolo, M. (2017). A generalized Fellner-Schall method for smoothing parameter optimization with application to Tweedie location, scale and shape models. Biometrics, 73(4), 1071–1081. https://doi.org/10.1111/biom.12666
 

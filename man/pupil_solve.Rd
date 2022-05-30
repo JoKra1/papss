@@ -12,7 +12,7 @@ pupil_solve(
   n = 10.1,
   t_max = 930,
   f = 1/(10^24),
-  pulse_dropping_factor = 5,
+  drop_last = 500,
   maxiter_inner = 10000,
   maxiter_outer = 25,
   convergence_tol = 1e-08,
@@ -21,7 +21,9 @@ pupil_solve(
   should_accum_H = F,
   init_cf = NULL,
   expand_by = 800,
-  sample_length = 20
+  sample_length = 20,
+  time_id = "time",
+  pupil_id = "subject"
 )
 }
 \arguments{
@@ -40,7 +42,7 @@ ensures 1 pulse every sample}
 
 \item{f}{Choice for parameter defined by Wierda et al. (scaling factor)}
 
-\item{pulse_dropping_factor}{Last pulse is modelled at index corresponding to: length(unique(data$time)) - (pulse_dropping_factor * round(t_max/100)) - 1}
+\item{drop_last}{Drop pulses that would happen in the last drop_last ms}
 
 \item{maxiter_inner}{Maximum steps taken by inner optimizer}
 
@@ -52,13 +54,17 @@ ensures 1 pulse every sample}
 
 \item{start_lambda}{Initial lambda value. Must be > 0 if a penalty should be used! Setting this to 0 and maxiter_outer=1, leads to estimation of an un-penalized additive model, i.e., recovers the traditional NNLS estimate used by Wierda et al. (2012) and Denison et al. (2012).}
 
-\item{should_accum_H}{Whether Hessian should be approximated using BFGS rule or not. If not, then least squares Hessian matrix is used. With the BFGS rule models ended up being much smoother in our simulations. So this should be set to true if under-smoothing is observed. However, the BFGS update is much more costly and takes much more time!}
+\item{should_accum_H}{Whether Hessian should be approximated using BFGS rule or not (see Fletcher, R. (2000). Practical Methods of Optimization). If not, then least squares Hessian matrix is used. With the BFGS rule models ended up being much smoother in our simulations. So this should be set to true if under-smoothing is observed. However, the BFGS update is much more costly and takes much more time!}
 
 \item{init_cf}{NULL or vector with initial coefficient estimate}
 
 \item{expand_by}{Time in ms by which to expand the time-series in the past. Then pulses that happened before the recorded time-window can still be approximated! See artificial_data_analysis vignette for details.}
 
 \item{sample_length}{Duration in ms of a single sample. If pupil dilation time-course was down-sampled to 50HZ, set this to 20}
+
+\item{time_id}{Name of time column in data}
+
+\item{pupil_id}{Name of pupil column in data}
 }
 \description{
 This function fits one of the penalized pupil models that are available with this package.

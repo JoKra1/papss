@@ -2,13 +2,14 @@
 % Please edit documentation in R/model_setup_helpers.R
 \name{create_spike_matrix_term}
 \alias{create_spike_matrix_term}
-\title{Create basis part of the model matrix as described by Wood (2017).}
+\title{Spike matrix creation}
 \usage{
 create_spike_matrix_term(
   expanded_time,
   expand_by,
   time,
   pulse_locations,
+  fact,
   n,
   t_max,
   f
@@ -23,6 +24,8 @@ create_spike_matrix_term(
 
 \item{pulse_locations}{A numeric vector containing index values of pulse loc.}
 
+\item{fact}{The factor column from the data-frame passed to papss::pupil_solve()}
+
 \item{n}{Parameter defined by Hoeks & Levelt (number of laters)}
 
 \item{t_max}{Parameter defined by Hoeks & Levelt (response maximum in ms)}
@@ -30,6 +33,7 @@ create_spike_matrix_term(
 \item{f}{Parameter defined by Wierda et al. (scaling factor)}
 }
 \description{
+Create basis part of the model matrix as described by Wood (2017).
 Essentially, this means creating a matrix with a column for each
 pulse location and to assign a pupil basis (convolved with that location)
 to each column.

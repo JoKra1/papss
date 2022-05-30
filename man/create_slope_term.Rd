@@ -2,17 +2,18 @@
 % Please edit documentation in R/model_setup_helpers.R
 \name{create_slope_term}
 \alias{create_slope_term}
-\title{Creates a single slope term (at the population level)}
+\title{Slope term creation}
 \usage{
-create_slope_term(time_unq, n_cat)
+create_slope_term(time, fact)
 }
 \arguments{
-\item{time_unq}{A numeric vector containing unique positive time values in ms}
+\item{time}{A numeric vector containing positive time values in ms}
 
-\item{n_cat}{Integer, number of categories for which slope should be repeated.}
+\item{fact}{The factor column from the data-frame passed to papss::pupil_solve()}
 }
 \description{
-Can be manipulated via "by" argument as done in mgcv.
+Creates a single slope term (at the population level)
+Can be manipulated via "by" argument as done in mgcv (Wood, 2017).
 Note: Use of unique values that are just repeated requires all levels
 of the category factor (usually subjects) to have the same values on the
 variable time.

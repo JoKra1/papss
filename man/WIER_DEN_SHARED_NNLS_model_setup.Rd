@@ -22,7 +22,7 @@ WIER_DEN_SHARED_NNLS_model_setup(
 
 \item{time}{A numeric vector containing positive time values in ms}
 
-\item{fact}{A factor vector containing factor level identifiers}
+\item{fact}{The factor column from the data-frame passed to papss::pupil_solve()}
 
 \item{pulse_locations}{A numeric vector containing index values of pulse loc.}
 

@@ -2,7 +2,7 @@
 % Please edit documentation in R/model_setup_helpers.R
 \name{term_by_factor}
 \alias{term_by_factor}
-\title{Achieves "by" keyword functionality}
+\title{Expand term by factor}
 \usage{
 term_by_factor(term, fact)
 }
@@ -12,7 +12,8 @@ term_by_factor(term, fact)
 \item{fact}{A factor variable.}
 }
 \description{
-Used in mgcv to enable by-factor smooths!
+Achieves "by" keyword functionality available in mgcv 
+to enable by-factor smooths (Wood, 2017)!
 }
 \details{
 See: Wood, S. N. (2017). Generalized Additive Models: An Introduction with R,

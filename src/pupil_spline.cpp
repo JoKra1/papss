@@ -17,9 +17,8 @@
 // ##################################### Classes #####################################
 
 // Penalty abstract class (interface)
-// Is implemented by a specific penalty (probably first identity).
-// Needs a public method to get the raw penalty matrix and the same matrix
-// parameterized with a lambda term.
+// Is implemented by a specific penalty (e.g., identity).
+// 
 // These penalty terms are discussed extensively in Wood (2017)
 // 'Generalized Additive Models : An introduction with R, Second Edition'
 class Penalty
@@ -40,6 +39,11 @@ int Penalty::getDim()
 }
 
 // Identity penalty class implements Penalty interface.
+// Using this penalty leads to solving a constrained
+// ridge regression problem.
+// See: https://scikit-learn.org/stable/modules/linear_model.html#ridge-regression
+// See: the section on P-splines in Wood (2017) for more details on how this penalty
+// compares to a difference penalty for example (Eilers & Marx, 1996).
 class IdentityPenalty : public Penalty
 {
 public:
@@ -73,11 +77,12 @@ Eigen::MatrixXd IdentityPenalty::parameterizePenalty(double l)
 // LambdaTerm class. As discussed in Wood (2017), multiple penalties (for individual
 // terms) can share the same lambda value (e.g., this is achieved with the 'id' keyword
 // in mgcv, see link below).
+//
 // Thus, the LambdaTerm class stores smart pointers to all the penalties
-// associated with this lambda value. It comes with a method to extract these penalties
-// (Not sure whether that is needed, just thought it might be handy..), a method to embed these
+// associated with this lambda value. It comes with a method to extract these penalties, a method to embed these
 // penalties in a zero-padded matrix (S in Wood 2017) to represent them in quadratic form cf' * S * cf
 // where cf contains a weight for each column in the model matrix (Wood, 2017 s. 4.3.1).
+//
 // This same method can also be used to embed multiple lambda terms in the same zero-padded matrix, which is
 // required for the generalized Fellner Schall update described in Wood & Fasiolo (2017):
 // This update is also implemented as a method here so that the lambda values of each term can be updated.
@@ -221,7 +226,7 @@ void enforceConstraints(Eigen::VectorXd &cf,
 // alternated form) in the lecture series by Ang (2020). Allows for a projection step
 // to solve constrained optimization problems (e.g., Non-negative least squares [NNLS] -
 // see Bolduc et al. (2017) or Ang (2020a; 2020b)). Further permits for optimizing a
-// penalized NNLS in case embS is different from a zero matrix.
+// penalized NNLS in case embS is different from a zero matrix (which it always is here).
 //
 // For discussion of why momentum helps/matters and the exact momentum rule used here
 // see Sutskever et al. (2013). The algorithm and code itself is based on the
@@ -292,7 +297,7 @@ void agdTOptimize(Eigen::VectorXd &cf,
         Eigen::VectorXd w = grad - prevGrad;
         enforceConstraints(cf,w, constraints);
         
-        // BFGS Hessian aproximation using projected gradient!
+        // BFGS Hessian aproximation using projected gradient information only!
         // Originally taken from: http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.77.1058&rep=rep1&type=pdf
         // Corrected for original notation in: Practical Methods of Optimization
         if(i > 0 && shouldAccumulH){
@@ -314,18 +319,6 @@ void agdTOptimize(Eigen::VectorXd &cf,
         // Error calculation.
         Eigen::VectorXd err = f - R * cf;
         double errDot = err.dot(err);
-
-        /*
-        // Restart handling.
-        if (errDot > prevErr)
-        {
-            Rcpp::Rcout << "Restart.\n";
-            cf = prevCf - (lr * ((Q * prevCf) - p));
-            enforceConstraints(cf, constraints);
-            ycf = cf;
-            ai = a0;
-        }
-        */
         
         // Crude convergence check.
         double absErrDiff = errDot > prevErr ? errDot - prevErr : prevErr - errDot;
@@ -335,6 +328,8 @@ void agdTOptimize(Eigen::VectorXd &cf,
         }
 
         // Prepare next iter.
+        
+        // Optionally collect coefficient history for external analysis.
         if (shouldCollectProgress)
         {
             cfHistory.push_back(prevCf);
@@ -348,7 +343,7 @@ void agdTOptimize(Eigen::VectorXd &cf,
     }
 }
 
-// Fits an additive model based on Cholesky decomposition, see Wood &
+// Fits a penalized additive model based on Cholesky decomposition, see Wood &
 // Fasiolo (2017). If shouldAccumulH=true, the BFGS update is used to
 // accumulate the Hessian iteratively. The resulting matrix then replaces
 // the X'*X terms in the update steps presented by Wood & Fasiolo (2017).
@@ -455,7 +450,7 @@ int solveAM(Eigen::VectorXd &cf,
             break;
 
         // Compute inverse of H + embS using Cholesky decomposition as
-        // recommended by Wood & Fasiolo (2017).
+        // described by Wood & Fasiolo (2017).
         // First form the Cholesky decomposition using LDL' decomposition:
         // See: https://eigen.tuxfamily.org/dox/classEigen_1_1LDLT.html
         Eigen::LDLT<Eigen::MatrixXd> ldlt(H + embS);
@@ -469,11 +464,11 @@ int solveAM(Eigen::VectorXd &cf,
         Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> ginvDecomp(embS);
         Eigen::MatrixXd gInv = ginvDecomp.pseudoInverse();
 
-        // Finally we need to calculate the current estimate of sigma^2.
+        // Finally we need to calculate the current estimate of sigma
+        // (equation from Wood & Fasiolo, 2017).
         sigma = errDot / (rowsX - (Inv * H).trace());
-        // Rcpp::Rcout << sigma << "\n";
 
-        // Now we can update all lamda terms.
+        // Now we can update all lamda terms using method by Wood & Fasiolo, 2017.
         cInd = startIndex;
 
         for (const std::unique_ptr<LambdaTerm> &LDT : lambdaContainer)

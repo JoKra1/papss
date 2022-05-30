@@ -16,7 +16,8 @@ extract_demand_for_fact(
   model = "WIER_SHARED",
   n = 10.1,
   t = 930,
-  f = 1/(10^24)
+  f = 1/(10^24),
+  time_id = "time"
 )
 }
 \arguments{
@@ -43,6 +44,8 @@ extract_demand_for_fact(
 \item{t}{Choice for t_max parameter}
 
 \item{f}{Choice for f parameter}
+
+\item{time_id}{Name of time column in aggr_dat}
 }
 \description{
 Extracts demand curves for each level of the factor passed to the pupil_solve
