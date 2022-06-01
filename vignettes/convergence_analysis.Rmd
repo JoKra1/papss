@@ -1,5 +1,5 @@
 ---
-title: "convergence_analysis"
+title: "Convergence analysis"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{convergence_analysis}
@@ -19,6 +19,7 @@ knitr::opts_chunk$set(
 
 ```{r setup}
 library(papss)
+set.seed(2022) # For replicability.
 ```
 
 ## Simulate pupil data
@@ -34,7 +35,7 @@ sim_obj <- additive_pupil_sim(n_sub = n,
                               sub_dev = 0.15,
                               trial_dev = 0.25,
                               residual_dev=15.0,
-                              should_plot=T)
+                              should_plot=F)
 dat <- sim_obj$data
 ```
 
@@ -61,8 +62,13 @@ plot(aggr_dat$time[aggr_dat$subject == 1],
 
 How will the solver deal with different starting values?
 
-```{r}
-iter <- 10
+```{r, include=FALSE}
+iter <- 4
+hist_collection <- readRDS("../data/coefHist.rds")
+```
+
+```{r, eval=FALSE}
+iter <- 4 # Github file limit prevents more runs for pre-loading..
 hist_collection <- list()
 
 for(i in 1:iter){
@@ -76,7 +82,7 @@ for(i in 1:iter){
                            maxiter_outer = 30,
                            model="WIER_SHARED",
                            expand_by = 0,
-                           pulse_dropping_factor = 3,
+                           drop_last = 300,
                            f=(1/(10^(24))),
                            should_collect_progress = T)
   
@@ -98,7 +104,7 @@ for(hi in 1:iter){
        chist[1,],
        type="l",
        lwd=3,
-       ylim=c(-3,3),
+       ylim=c(-1.75,1.25),
        xlab="Iterations",
        ylab="Coefficient value")
   
@@ -126,25 +132,32 @@ plot(1:nrow(chist),
 for(hi in 2:iter){
   chist <- hist_collection[[hi]]
   lines(1:nrow(chist), chist[,ncol(chist)],
-       col=ri,
+       col=hi,
        ylim=c(-3,3),
        xlab="Coefficient",
        ylab="Coefficient value",type="l",lwd=3,lty=3)
 }
 
-# Visualize last 25 coefficient sets
-heatmap(chist[,(ncol(chist) - 20):ncol(chist)],
+
+chist <- hist_collection[[1]]
+# Visualize last 20 coefficient sets
+heatmap(chist[,(ncol(chist) - 19):ncol(chist)],
         Colv = NA,
         Rowv = NA,
-        scale = 'none')
+        scale = 'none',
+        ylab="Coef",
+        xlab="Iteration",
+        main= "Run: 1")
 
 
 for(hi in 2:iter){
   chist <- hist_collection[[hi]]
-  heatmap(chist[,(ncol(chist) - 20):ncol(chist)],
+  heatmap(chist[,(ncol(chist) - 19):ncol(chist)],
           Colv = NA,
           Rowv = NA,
-          scale = 'none')
+          scale = 'none',
+          ylab="Coef",
+          xlab="Iteration",main=paste0("Run: ",hi))
 
 
 }
