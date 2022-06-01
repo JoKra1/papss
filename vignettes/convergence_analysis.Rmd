@@ -62,13 +62,8 @@ plot(aggr_dat$time[aggr_dat$subject == 1],
 
 How will the solver deal with different starting values?
 
-```{r, include=FALSE}
-iter <- 4
-hist_collection <- readRDS("../data/coefHist.rds")
-```
-
-```{r, eval=FALSE}
-iter <- 4 # Github file limit prevents more runs for pre-loading..
+```{r}
+iter <- 4 # More then 4 takes to long for vignette building
 hist_collection <- list()
 
 for(i in 1:iter){
