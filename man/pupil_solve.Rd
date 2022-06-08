@@ -23,7 +23,7 @@ pupil_solve(
   expand_by = 800,
   sample_length = 20,
   time_id = "time",
-  pupil_id = "subject"
+  pupil_id = "pupil"
 )
 }
 \arguments{

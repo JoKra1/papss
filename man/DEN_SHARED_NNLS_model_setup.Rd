@@ -2,7 +2,7 @@
 % Please edit documentation in R/model_setup_helpers.R
 \name{DEN_SHARED_NNLS_model_setup}
 \alias{DEN_SHARED_NNLS_model_setup}
-\title{Model template based on Denison et al.(2020)'s model investigation}
+\title{Model template based on Denison et al.(2020)'s model}
 \usage{
 DEN_SHARED_NNLS_model_setup(
   expanded_time,
@@ -34,15 +34,30 @@ DEN_SHARED_NNLS_model_setup(
 }
 \description{
 Creates trainings matrix and penalties for a fully penalized
-version inspired by the models investigated by Denison et al. (2020).
-Similarly, separate sets of coefficients are estimated per
-subject with the h_basis terms. All those coefficients are again constrained
-to be non-negative. The model also includes an intercept/offset term for each
-subject as introduced by Denison et al., (2020. These are not constrained.
-This model again penalizes
-the coefficients corresponding to the h_basis terms. Specifically, it
-enforces a single penalty term shared by all subjects (e.g., this is
-similar to the 'fs' basis in mgcv). The form of the penalty expressed on all of the
+version of a model inspired by the models investigated by Denison et al. (2020).
+Among the parameters introduced by Denison et al. (2020) was an intercept/offset term.
+Apart from estimating this term per factor level, separate sets of coefficients
+are estimated per factor level with the h_basis terms (as was done by Wierda et al., 2012).
+All those coefficients are again constrained to be non-negative.
+The intercept terms are not constrained.
+
+This model differs from the one by Wierda et al. (2012) and Denison et al. (2020)
+in that it penalizes the coefficients corresponding to the h_basis terms.
+Specifically, it enforces a single penalty term shared by all factor levels (e.g., this is
+similar to the 'fs' basis in mgcv, Wood, 2017). The form of the penalty expressed on all of the
 basis functions is a simple identity matrix. We here also penalize all intercept
 terms, again with a single penalty.
+}
+\details{
+See: Denison, R. N., Parker, J. A., & Carrasco, M. (2020). Modeling pupil
+responses to rapid sequential events. Behavior Research Methods, 52(5),
+1991–2007. https://doi.org/10.3758/s13428-020-01368-6
+
+See: Wierda, S. M., van Rijn, H., Taatgen, N. A., & Martens, S. (2012).
+Pupil dilation deconvolution reveals the dynamics of attention at high
+temporal resolution. Proceedings of the National Academy of Sciences of
+the United States of America, 109(22), 8456–8460.
+
+For penalty setup see: Wood, S. N. (2017). Generalized Additive Models:
+An Introduction with R, Second Edition (2nd ed.). Chapman and Hall/CRC.
 }

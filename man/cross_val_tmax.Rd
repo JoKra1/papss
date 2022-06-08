@@ -23,7 +23,7 @@ cross_val_tmax(
   expand_by = 800,
   sample_length = 20,
   time_id = "time",
-  pupil_id = "subject",
+  pupil_id = "pupil",
   should_plot = T
 )
 }

@@ -36,15 +36,25 @@ WIER_SHARED_NNLS_model_setup(
 Creates trainings matrix and penalties for a fully penalized
 version of the original Wierda et al. (2012) model.
 Like by Wierda et al. separate sets of coefficients are estimated per
-subject with the h_basis terms. All those coefficients are again constrained
-to be non-negative. Model also includes the slope terms for each subject that
+factor level with the h_basis terms. All those coefficients are again constrained
+to be non-negative. The Model also includes the slope terms for each factor level that
 Wierda et al. (2012) introduced. These are not constrained - since their
-primary purpose was to account for drift in the pupil averages of individual
-subjects.
+primary purpose in the experiments by Wierda et al. was to account for drift (i.e., positive
+or negative) in the pupil averages of individual subjects.
+
 This model differs from the one by Wierda et al. (2012) in that it penalizes
 the coefficients corresponding to the h_basis terms. Specifically, it
-enforces a single penalty term shared by all subjects (e.g., this is
-similar to the 'fs' basis in mgcv). The form of the penalty expressed on all of the
+enforces a single penalty term shared by all factor levels (e.g., this is
+similar to the 'fs' basis in mgcv, Wood, 2017). The form of the penalty expressed on all of the
 basis functions is a simple identity matrix. We here also penalize all slope
 terms, again with a single penalty.
+}
+\details{
+See: Wierda, S. M., van Rijn, H., Taatgen, N. A., & Martens, S. (2012).
+Pupil dilation deconvolution reveals the dynamics of attention at high
+temporal resolution. Proceedings of the National Academy of Sciences of
+the United States of America, 109(22), 8456–8460.
+
+For penalty setup see: Wood, S. N. (2017). Generalized Additive Models:
+An Introduction with R, Second Edition (2nd ed.). Chapman and Hall/CRC.
 }

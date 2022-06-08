@@ -344,7 +344,7 @@ void agdTOptimize(Eigen::VectorXd &cf,
 }
 
 // Fits a penalized additive model based on Cholesky decomposition, see Wood &
-// Fasiolo (2017). If shouldAccumulH=true, the BFGS update is used to
+// Fasiolo (2017). If shouldAccumulH=true, the BFGS update (see: Fletcher, 2000) is used to
 // accumulate the Hessian iteratively. The resulting matrix then replaces
 // the X'*X terms in the update steps presented by Wood & Fasiolo (2017).
 //

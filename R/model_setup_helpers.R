@@ -182,17 +182,27 @@ term_by_factor <- function(term,fact) {
 #' Creates trainings matrix and penalties for a fully penalized
 #' version of the original Wierda et al. (2012) model.
 #' Like by Wierda et al. separate sets of coefficients are estimated per
-#' subject with the h_basis terms. All those coefficients are again constrained
-#' to be non-negative. Model also includes the slope terms for each subject that
+#' factor level with the h_basis terms. All those coefficients are again constrained
+#' to be non-negative. The Model also includes the slope terms for each factor level that
 #' Wierda et al. (2012) introduced. These are not constrained - since their
-#' primary purpose was to account for drift in the pupil averages of individual
-#' subjects.
+#' primary purpose in the experiments by Wierda et al. was to account for drift (i.e., positive
+#' or negative) in the pupil averages of individual subjects.
+#' 
 #' This model differs from the one by Wierda et al. (2012) in that it penalizes
 #' the coefficients corresponding to the h_basis terms. Specifically, it
-#' enforces a single penalty term shared by all subjects (e.g., this is
-#' similar to the 'fs' basis in mgcv). The form of the penalty expressed on all of the
+#' enforces a single penalty term shared by all factor levels (e.g., this is
+#' similar to the 'fs' basis in mgcv, Wood, 2017). The form of the penalty expressed on all of the
 #' basis functions is a simple identity matrix. We here also penalize all slope
 #' terms, again with a single penalty.
+#' 
+#' @details
+#' See: Wierda, S. M., van Rijn, H., Taatgen, N. A., & Martens, S. (2012).
+#' Pupil dilation deconvolution reveals the dynamics of attention at high
+#' temporal resolution. Proceedings of the National Academy of Sciences of
+#' the United States of America, 109(22), 8456–8460.
+#' 
+#' For penalty setup see: Wood, S. N. (2017). Generalized Additive Models:
+#' An Introduction with R, Second Edition (2nd ed.). Chapman and Hall/CRC.
 #' 
 #' @param expanded_time A numeric vector containing positive time values in ms, expanded by a certain amount of ms
 #' @param expand_by Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms
@@ -242,17 +252,27 @@ WIER_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse
 #' Creates trainings matrix and penalties for a fully penalized
 #' version of the original Wierda et al. (2012) model.
 #' Like by Wierda et al. separate sets of coefficients are estimated per
-#' subject with the h_basis terms. All those coefficients are again constrained
-#' to be non-negative. Model also includes the slope terms for each subject that
+#' factor level with the h_basis terms. All those coefficients are again constrained
+#' to be non-negative. The Model also includes the slope terms for each factor level that
 #' Wierda et al. (2012) introduced. These are not constrained - since their
-#' primary purpose was to account for drift in the pupil averages of individual
-#' subjects.
+#' primary purpose in the experiments by Wierda et al. was to account for drift (i.e., positive
+#' or negative) in the pupil averages of individual subjects.
+#' 
 #' This model differs from the one by Wierda et al. (2012) in that it penalizes
 #' the coefficients corresponding to the h_basis terms. Specifically, it
-#' enforces a **penalty term for each individual subject** (e.g., this is
-#' similar to using the 'by' keyword in mgcv). The form of the penalty expressed on all of the
+#' enforces a penalty term for each individual factor level (e.g., this is
+#' similar to using the 'by' keyword in mgcv, Wood, 2017). The form of the penalty expressed on all of the
 #' basis functions is a simple identity matrix. We here also penalize all slope
 #' terms, again with a single penalty.
+#' 
+#' @details
+#' See: Wierda, S. M., van Rijn, H., Taatgen, N. A., & Martens, S. (2012).
+#' Pupil dilation deconvolution reveals the dynamics of attention at high
+#' temporal resolution. Proceedings of the National Academy of Sciences of
+#' the United States of America, 109(22), 8456–8460.
+#' 
+#' For penalty setup see: Wood, S. N. (2017). Generalized Additive Models:
+#' An Introduction with R, Second Edition (2nd ed.). Chapman and Hall/CRC.
 #' 
 #' @param expanded_time A numeric vector containing positive time values in ms, expanded by a certain amount of ms
 #' @param expand_by Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms
@@ -296,21 +316,36 @@ WIER_IND_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse_lo
 }
 
 #' @title
-#' Model template based on Denison et al.(2020)'s model investigation
+#' Model template based on Denison et al.(2020)'s model
 #'
 #' @description
 #' Creates trainings matrix and penalties for a fully penalized
-#' version inspired by the models investigated by Denison et al. (2020).
-#' Similarly, separate sets of coefficients are estimated per
-#' subject with the h_basis terms. All those coefficients are again constrained
-#' to be non-negative. The model also includes an intercept/offset term for each
-#' subject as introduced by Denison et al., (2020. These are not constrained.
-#' This model again penalizes
-#' the coefficients corresponding to the h_basis terms. Specifically, it
-#' enforces a single penalty term shared by all subjects (e.g., this is
-#' similar to the 'fs' basis in mgcv). The form of the penalty expressed on all of the
+#' version of a model inspired by the models investigated by Denison et al. (2020).
+#' Among the parameters introduced by Denison et al. (2020) was an intercept/offset term.
+#' Apart from estimating this term per factor level, separate sets of coefficients
+#' are estimated per factor level with the h_basis terms (as was done by Wierda et al., 2012).
+#' All those coefficients are again constrained to be non-negative.
+#' The intercept terms are not constrained.
+#' 
+#' This model differs from the one by Wierda et al. (2012) and Denison et al. (2020)
+#' in that it penalizes the coefficients corresponding to the h_basis terms.
+#' Specifically, it enforces a single penalty term shared by all factor levels (e.g., this is
+#' similar to the 'fs' basis in mgcv, Wood, 2017). The form of the penalty expressed on all of the
 #' basis functions is a simple identity matrix. We here also penalize all intercept
 #' terms, again with a single penalty.
+#' 
+#' @details
+#' See: Denison, R. N., Parker, J. A., & Carrasco, M. (2020). Modeling pupil
+#' responses to rapid sequential events. Behavior Research Methods, 52(5),
+#' 1991–2007. https://doi.org/10.3758/s13428-020-01368-6
+#' 
+#' See: Wierda, S. M., van Rijn, H., Taatgen, N. A., & Martens, S. (2012).
+#' Pupil dilation deconvolution reveals the dynamics of attention at high
+#' temporal resolution. Proceedings of the National Academy of Sciences of
+#' the United States of America, 109(22), 8456–8460.
+#' 
+#' For penalty setup see: Wood, S. N. (2017). Generalized Additive Models:
+#' An Introduction with R, Second Edition (2nd ed.). Chapman and Hall/CRC.
 #' 
 #' @param expanded_time A numeric vector containing positive time values in ms, expanded by a certain amount of ms
 #' @param expand_by Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms
@@ -354,20 +389,41 @@ DEN_SHARED_NNLS_model_setup <- function(expanded_time,expand_by,time,fact,pulse_
 }
 
 #' @title
-#' Model template based on Denison et al.(2020)'s model investigation and Wierda et al. (2012)'s model
+#' Model template based on Denison et al.(2020)'s and Wierda et al. (2012)'s model
 #'
 #' @description
-#' Like by Wierda et al. (2012) separate sets of coefficients are estimated per
-#' subject with the h_basis terms. All those coefficients are again constrained
-#' to be non-negative. The moodel also includes the intercept terms for each subject that
-#' Denison et al. (2012) introduced as well as the slope term introduced by
-#' Wierda et al., (2012). These are not constrained.
+#' Creates trainings matrix and penalties for a fully penalized
+#' version of a model inspired by the models investigated by Denison et al. (2020)
+#' and Wierda et al. (2012).
+#' Among the parameters introduced by Denison et al. (2020) was an intercept/offset term.
+#' Apart from estimating this term per factor level, separate sets of coefficients
+#' are estimated per factor level with the h_basis terms (as was done by Wierda et al., 2012).
+#' All those coefficients are again constrained to be non-negative.
+#' The intercept terms are not constrained. Finally, the Model also
+#' includes the slope terms for each factor level that
+#' Wierda et al. (2012) introduced. These are not constrained - since their
+#' primary purpose in the experiments by Wierda et al. was to account for drift (i.e., positive
+#' or negative) in the pupil averages of individual subjects.
 #' 
-#' This model again penalizes the coefficients corresponding to the h_basis terms.
-#' Specifically, it enforces a single penalty term shared by all subjects (e.g., this is
-#' similar to the 'fs' basis in mgcv). The form of the penalty expressed on all of the
+#' This model differs from the one by Wierda et al. (2012) and Denison et al. (2020)
+#' in that it penalizes the coefficients corresponding to the h_basis terms.
+#' Specifically, it enforces a single penalty term shared by all factor levels (e.g., this is
+#' similar to the 'fs' basis in mgcv, Wood, 2017). The form of the penalty expressed on all of the
 #' basis functions is a simple identity matrix. We here also penalize all intercept
-#' and slope terms, again with a single penalty.
+#' terms, again with a single penalty.
+#' 
+#' @details
+#' See: Denison, R. N., Parker, J. A., & Carrasco, M. (2020). Modeling pupil
+#' responses to rapid sequential events. Behavior Research Methods, 52(5),
+#' 1991–2007. https://doi.org/10.3758/s13428-020-01368-6
+#' 
+#' See: Wierda, S. M., van Rijn, H., Taatgen, N. A., & Martens, S. (2012).
+#' Pupil dilation deconvolution reveals the dynamics of attention at high
+#' temporal resolution. Proceedings of the National Academy of Sciences of
+#' the United States of America, 109(22), 8456–8460.
+#' 
+#' For penalty setup see: Wood, S. N. (2017). Generalized Additive Models:
+#' An Introduction with R, Second Edition (2nd ed.). Chapman and Hall/CRC.
 #' 
 #' @param expanded_time A numeric vector containing positive time values in ms, expanded by a certain amount of ms
 #' @param expand_by Expansion time in ms passed to papss::pupil_solve(expand_by=) divided by sample length in ms

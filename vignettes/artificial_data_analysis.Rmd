@@ -284,6 +284,7 @@ demand_extract <- extract_demand_for_fact(aggr_dat,
                                           factor_id = "subject") 
   
 # Get demand dat for each subject and plot
+par(mfrow=c(1,2))
 for (sub in unique(aggr_dat$subject)) {
   sub_dat <- demand_extract[demand_extract$factor == sub,]
   # Since this is simulated data we can compare the solutions to the simulated truth
@@ -302,6 +303,7 @@ legend("topleft",c("True Demand",
                    "Estimated Demand"),
        lty=c(1,2),
        col=c("black","red"))
+par(mfrow=c(1,1))
 ```
 
 # Advaced topics
@@ -360,6 +362,7 @@ uncertainty surrounding them.
 se <- bootstrap$standardError
   
 # Add se plot to demand dat extracted earlier
+par(mfrow=c(1,2))
 si <- 1
 for (sub in unique(aggr_dat$subject)) {
   sub_dat <- demand_extract[demand_extract$factor == sub,]
@@ -391,6 +394,7 @@ for (sub in unique(aggr_dat$subject)) {
         sub_dat$demand - sub_se_e,lty=2)
   si <- si + 1
 }
+par(mfrow=c(1,1))
 ```
 
 ## Tuning the t_max parameter
