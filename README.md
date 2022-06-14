@@ -22,7 +22,7 @@ Sys.which("make")
 You can also use this command in case you are unsure whether you have already installed RTools in the past.
 
 ### macOS-specific
-On macOS you will first need to install [Xcode](https://apps.apple.com/de/app/xcode/id497799835?mt=12) to get compiler support for R.
+On macOS you will first need to install [Xcode](https://developer.apple.com/xcode/) to get compiler support for R.
 
 ### OS-independent
 Subsequently, you should be able to install the package right from this repository using functionality offered by the ``remotes`` package, as described for example [here](https://cran.r-project.org/web/packages/remotes/readme/README.html). Importantly, if you want to build the example vignette, you should set the ``build_vignettes`` argument to *True*. In that case you also need to set the ``dependencies`` argument to *True*, to install the optional dependencies needed for the vignettes (e.g. ``knitr`` and ``rmarkdown``):
